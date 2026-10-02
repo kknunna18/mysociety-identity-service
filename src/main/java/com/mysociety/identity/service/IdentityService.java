@@ -54,7 +54,7 @@ public class IdentityService {
 
     @Transactional
     public TokenResponse login(LoginRequest request, String ip, String agent) {
-        AppUser user = request.identifier().contains("@") ? users.findByEmailIgnoreCase(request.identifier()).orElseThrow(this::unauthorized) : users.findByMobileNumber(request.identifier()).orElseThrow(this::unauthorized);
+        AppUser user = request.username().contains("@") ? users.findByEmailIgnoreCase(request.username()).orElseThrow(this::unauthorized) : users.findByMobileNumber(request.username()).orElseThrow(this::unauthorized);
         if (user.getStatus() != UserStatus.ACTIVE || (user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now())) || !passwords.matches(request.password(), user.getPasswordHash())) {
             audit(user.getId(), "LOGIN", "FAILURE");
             throw unauthorized();

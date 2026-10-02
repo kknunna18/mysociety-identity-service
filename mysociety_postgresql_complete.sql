@@ -22,30 +22,36 @@
 
 BEGIN;
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE
+EXTENSION IF NOT EXISTS pgcrypto;
 CREATE SCHEMA IF NOT EXISTS mysociety;
-SET search_path TO mysociety, public;
+SET
+search_path TO mysociety, public;
 
 /* ================================================================
    1. COMMON FUNCTIONS
    ================================================================ */
 
-CREATE OR REPLACE FUNCTION set_updated_at()
+CREATE
+OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
+    NEW.updated_at
+= CURRENT_TIMESTAMP;
+RETURN NEW;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION prevent_update_delete()
+CREATE
+OR REPLACE FUNCTION prevent_update_delete()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    RAISE EXCEPTION '% records are append-only', TG_TABLE_NAME;
+    RAISE
+EXCEPTION '% records are append-only', TG_TABLE_NAME;
 END;
 $$;
 
@@ -53,184 +59,591 @@ $$;
    2. TENANT, IDENTITY AND AUTHORIZATION
    ================================================================ */
 
-CREATE TABLE IF NOT EXISTS societies (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    code                VARCHAR(30) NOT NULL UNIQUE,
-    name                VARCHAR(150) NOT NULL,
-    registration_number VARCHAR(80),
-    email               VARCHAR(254),
-    phone               VARCHAR(30),
-    address_line1       VARCHAR(200),
-    address_line2       VARCHAR(200),
-    city                VARCHAR(100),
-    state_name          VARCHAR(100),
-    postal_code         VARCHAR(20),
-    country_code        CHAR(2) NOT NULL DEFAULT 'IN',
-    timezone            VARCHAR(60) NOT NULL DEFAULT 'Asia/Kolkata',
-    currency_code       CHAR(3) NOT NULL DEFAULT 'INR',
-    logo_url            VARCHAR(500),
-    status              VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
-                        CHECK (status IN ('TRIAL','ACTIVE','SUSPENDED','INACTIVE')),
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version             BIGINT NOT NULL DEFAULT 0
-);
+CREATE TABLE IF NOT EXISTS societies
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    code VARCHAR
+(
+    30
+) NOT NULL UNIQUE,
+    name VARCHAR
+(
+    150
+) NOT NULL,
+    registration_number VARCHAR
+(
+    80
+),
+    email VARCHAR
+(
+    254
+),
+    phone VARCHAR
+(
+    30
+),
+    address_line1 VARCHAR
+(
+    200
+),
+    address_line2 VARCHAR
+(
+    200
+),
+    city VARCHAR
+(
+    100
+),
+    state_name VARCHAR
+(
+    100
+),
+    postal_code VARCHAR
+(
+    20
+),
+    country_code CHAR
+(
+    2
+) NOT NULL DEFAULT 'IN',
+    timezone VARCHAR
+(
+    60
+) NOT NULL DEFAULT 'Asia/Kolkata',
+    currency_code CHAR
+(
+    3
+) NOT NULL DEFAULT 'INR',
+    logo_url VARCHAR
+(
+    500
+),
+    status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'ACTIVE'
+    CHECK
+(
+    status
+    IN
+(
+    'TRIAL',
+    'ACTIVE',
+    'SUSPENDED',
+    'INACTIVE'
+)),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0
+    );
 
-CREATE TABLE IF NOT EXISTS app_users (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email               VARCHAR(254),
-    mobile_number       VARCHAR(30),
-    password_hash       VARCHAR(255),
-    first_name          VARCHAR(100) NOT NULL,
-    last_name           VARCHAR(100),
-    profile_image_url   VARCHAR(500),
-    preferred_language  VARCHAR(10) NOT NULL DEFAULT 'en',
-    timezone            VARCHAR(60) NOT NULL DEFAULT 'Asia/Kolkata',
-    email_verified      BOOLEAN NOT NULL DEFAULT FALSE,
-    mobile_verified     BOOLEAN NOT NULL DEFAULT FALSE,
-    mfa_enabled         BOOLEAN NOT NULL DEFAULT FALSE,
-    failed_login_count  INTEGER NOT NULL DEFAULT 0 CHECK (failed_login_count >= 0),
-    locked_until        TIMESTAMPTZ,
-    last_login_at       TIMESTAMPTZ,
-    status              VARCHAR(20) NOT NULL DEFAULT 'INVITED'
-                        CHECK (status IN ('INVITED','ACTIVE','LOCKED','SUSPENDED','INACTIVE')),
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version             BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT ck_user_contact CHECK (email IS NOT NULL OR mobile_number IS NOT NULL)
-);
+CREATE TABLE IF NOT EXISTS app_users
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    email VARCHAR
+(
+    254
+),
+    mobile_number VARCHAR
+(
+    30
+),
+    password_hash VARCHAR
+(
+    255
+),
+    first_name VARCHAR
+(
+    100
+) NOT NULL,
+    last_name VARCHAR
+(
+    100
+),
+    profile_image_url VARCHAR
+(
+    500
+),
+    preferred_language VARCHAR
+(
+    10
+) NOT NULL DEFAULT 'en',
+    timezone VARCHAR
+(
+    60
+) NOT NULL DEFAULT 'Asia/Kolkata',
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    mobile_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    failed_login_count INTEGER NOT NULL DEFAULT 0 CHECK
+(
+    failed_login_count
+    >=
+    0
+),
+    locked_until TIMESTAMPTZ,
+    last_login_at TIMESTAMPTZ,
+    status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'INVITED'
+    CHECK
+(
+    status
+    IN
+(
+    'INVITED',
+    'ACTIVE',
+    'LOCKED',
+    'SUSPENDED',
+    'INACTIVE'
+)),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_user_contact CHECK
+(
+    email
+    IS
+    NOT
+    NULL
+    OR
+    mobile_number
+    IS
+    NOT
+    NULL
+)
+    );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_app_users_email_lower
-    ON app_users (LOWER(email)) WHERE email IS NOT NULL;
+    ON app_users (LOWER (email)) WHERE email IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_app_users_mobile
     ON app_users (mobile_number) WHERE mobile_number IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS roles (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id  UUID REFERENCES societies(id) ON DELETE CASCADE,
-    code        VARCHAR(60) NOT NULL,
-    name        VARCHAR(100) NOT NULL,
-    description VARCHAR(500),
-    is_system   BOOLEAN NOT NULL DEFAULT FALSE,
-    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version     BIGINT NOT NULL DEFAULT 0
-);
+CREATE TABLE IF NOT EXISTS roles
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    code VARCHAR
+(
+    60
+) NOT NULL,
+    name VARCHAR
+(
+    100
+) NOT NULL,
+    description VARCHAR
+(
+    500
+),
+    is_system BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0
+    );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_roles_global_code
     ON roles (code) WHERE society_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_roles_society_code
     ON roles (society_id, code) WHERE society_id IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS permissions (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    code        VARCHAR(100) NOT NULL UNIQUE,
-    module_name VARCHAR(60) NOT NULL,
-    description VARCHAR(500),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE TABLE IF NOT EXISTS permissions
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    code VARCHAR
+(
+    100
+) NOT NULL UNIQUE,
+    module_name VARCHAR
+(
+    60
+) NOT NULL,
+    description VARCHAR
+(
+    500
+),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
 
-CREATE TABLE IF NOT EXISTS role_permissions (
-    role_id       UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (role_id, permission_id)
-);
+CREATE TABLE IF NOT EXISTS role_permissions
+(
+    role_id
+    UUID
+    NOT
+    NULL
+    REFERENCES
+    roles
+(
+    id
+) ON DELETE CASCADE,
+    permission_id UUID NOT NULL REFERENCES permissions
+(
+    id
+)
+  ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY
+(
+    role_id,
+    permission_id
+)
+    );
 
-CREATE TABLE IF NOT EXISTS user_society_roles (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id  UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    user_id     UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-    role_id     UUID NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
-    valid_from  DATE NOT NULL DEFAULT CURRENT_DATE,
+CREATE TABLE IF NOT EXISTS user_society_roles
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES app_users
+(
+    id
+)
+  ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES roles
+(
+    id
+)
+  ON DELETE RESTRICT,
+    valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
     valid_until DATE,
-    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-    granted_by  UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version     BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT ck_role_validity CHECK (valid_until IS NULL OR valid_until >= valid_from),
-    UNIQUE (society_id, user_id, role_id, valid_from)
-);
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    granted_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_role_validity CHECK
+(
+    valid_until
+    IS
+    NULL
+    OR
+    valid_until
+    >=
+    valid_from
+),
+    UNIQUE
+(
+    society_id,
+    user_id,
+    role_id,
+    valid_from
+)
+    );
 
 CREATE INDEX IF NOT EXISTS ix_user_society_roles_user
     ON user_society_roles (user_id, society_id, is_active);
 
-CREATE TABLE IF NOT EXISTS refresh_tokens (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id             UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-    token_hash          VARCHAR(255) NOT NULL UNIQUE,
-    device_name         VARCHAR(150),
-    ip_address          INET,
-    user_agent          VARCHAR(500),
-    issued_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at          TIMESTAMPTZ NOT NULL,
-    revoked_at          TIMESTAMPTZ,
-    replaced_by_token_id UUID REFERENCES refresh_tokens(id) ON DELETE SET NULL,
-    CONSTRAINT ck_refresh_expiry CHECK (expires_at > issued_at)
-);
+CREATE TABLE IF NOT EXISTS refresh_tokens
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    user_id UUID NOT NULL REFERENCES app_users
+(
+    id
+) ON DELETE CASCADE,
+    token_hash VARCHAR
+(
+    255
+) NOT NULL UNIQUE,
+    device_name VARCHAR
+(
+    150
+),
+    ip_address INET,
+    user_agent VARCHAR
+(
+    500
+),
+    issued_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    replaced_by_token_id UUID REFERENCES refresh_tokens
+(
+    id
+)
+  ON DELETE SET NULL,
+    CONSTRAINT ck_refresh_expiry CHECK
+(
+    expires_at >
+    issued_at
+)
+    );
 
 /* ================================================================
    3. SOCIETY STRUCTURE AND RESIDENTS
    ================================================================ */
 
-CREATE TABLE IF NOT EXISTS buildings (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id      UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    code            VARCHAR(30) NOT NULL,
-    name            VARCHAR(100) NOT NULL,
-    number_of_floors INTEGER CHECK (number_of_floors >= 0),
-    status          VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
-                    CHECK (status IN ('ACTIVE','INACTIVE','UNDER_MAINTENANCE')),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version         BIGINT NOT NULL DEFAULT 0,
-    UNIQUE (society_id, code)
-);
+CREATE TABLE IF NOT EXISTS buildings
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    code VARCHAR
+(
+    30
+) NOT NULL,
+    name VARCHAR
+(
+    100
+) NOT NULL,
+    number_of_floors INTEGER CHECK
+(
+    number_of_floors
+    >=
+    0
+),
+    status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'ACTIVE'
+    CHECK
+(
+    status
+    IN
+(
+    'ACTIVE',
+    'INACTIVE',
+    'UNDER_MAINTENANCE'
+)),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    UNIQUE
+(
+    society_id,
+    code
+)
+    );
 
-CREATE TABLE IF NOT EXISTS units (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id       UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    building_id      UUID NOT NULL REFERENCES buildings(id) ON DELETE RESTRICT,
-    unit_number      VARCHAR(30) NOT NULL,
-    floor_number     INTEGER,
-    unit_type        VARCHAR(30),
-    area_sq_ft       NUMERIC(12,2) CHECK (area_sq_ft IS NULL OR area_sq_ft > 0),
-    occupancy_status VARCHAR(20) NOT NULL DEFAULT 'VACANT'
-                     CHECK (occupancy_status IN ('VACANT','OWNER_OCCUPIED','TENANT_OCCUPIED','UNAVAILABLE')),
-    status           VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
-                     CHECK (status IN ('ACTIVE','INACTIVE')),
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version          BIGINT NOT NULL DEFAULT 0,
-    UNIQUE (society_id, building_id, unit_number),
-    UNIQUE (society_id, id)
-);
+CREATE TABLE IF NOT EXISTS units
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    building_id UUID NOT NULL REFERENCES buildings
+(
+    id
+)
+  ON DELETE RESTRICT,
+    unit_number VARCHAR
+(
+    30
+) NOT NULL,
+    floor_number INTEGER,
+    unit_type VARCHAR
+(
+    30
+),
+    area_sq_ft NUMERIC
+(
+    12,
+    2
+) CHECK
+(
+    area_sq_ft
+    IS
+    NULL
+    OR
+    area_sq_ft >
+    0
+),
+    occupancy_status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'VACANT'
+    CHECK
+(
+    occupancy_status
+    IN
+(
+    'VACANT',
+    'OWNER_OCCUPIED',
+    'TENANT_OCCUPIED',
+    'UNAVAILABLE'
+)),
+    status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'ACTIVE'
+    CHECK
+(
+    status
+    IN
+(
+    'ACTIVE',
+    'INACTIVE'
+)),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    UNIQUE
+(
+    society_id,
+    building_id,
+    unit_number
+),
+    UNIQUE
+(
+    society_id,
+    id
+)
+    );
 
 CREATE INDEX IF NOT EXISTS ix_units_society_building
     ON units (society_id, building_id, status);
 
-CREATE TABLE IF NOT EXISTS household_memberships (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id          UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    unit_id             UUID NOT NULL REFERENCES units(id) ON DELETE CASCADE,
-    user_id             UUID NOT NULL REFERENCES app_users(id) ON DELETE RESTRICT,
-    membership_type     VARCHAR(20) NOT NULL
-                        CHECK (membership_type IN ('OWNER','TENANT','FAMILY_MEMBER','CARETAKER')),
-    is_primary_contact  BOOLEAN NOT NULL DEFAULT FALSE,
-    move_in_date        DATE NOT NULL,
-    move_out_date       DATE,
-    verification_status VARCHAR(20) NOT NULL DEFAULT 'PENDING'
-                        CHECK (verification_status IN ('PENDING','VERIFIED','REJECTED')),
-    emergency_contact_name   VARCHAR(150),
-    emergency_contact_phone  VARCHAR(30),
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version             BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT ck_membership_dates CHECK (move_out_date IS NULL OR move_out_date >= move_in_date),
-    UNIQUE (society_id, unit_id, user_id, move_in_date)
-);
+CREATE TABLE IF NOT EXISTS household_memberships
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    unit_id UUID NOT NULL REFERENCES units
+(
+    id
+)
+  ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES app_users
+(
+    id
+)
+  ON DELETE RESTRICT,
+    membership_type VARCHAR
+(
+    20
+) NOT NULL
+    CHECK
+(
+    membership_type
+    IN
+(
+    'OWNER',
+    'TENANT',
+    'FAMILY_MEMBER',
+    'CARETAKER'
+)),
+    is_primary_contact BOOLEAN NOT NULL DEFAULT FALSE,
+    move_in_date DATE NOT NULL,
+    move_out_date DATE,
+    verification_status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'PENDING'
+    CHECK
+(
+    verification_status
+    IN
+(
+    'PENDING',
+    'VERIFIED',
+    'REJECTED'
+)),
+    emergency_contact_name VARCHAR
+(
+    150
+),
+    emergency_contact_phone VARCHAR
+(
+    30
+),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_membership_dates CHECK
+(
+    move_out_date
+    IS
+    NULL
+    OR
+    move_out_date
+    >=
+    move_in_date
+),
+    UNIQUE
+(
+    society_id,
+    unit_id,
+    user_id,
+    move_in_date
+)
+    );
 
 CREATE INDEX IF NOT EXISTS ix_membership_user_active
     ON household_memberships (user_id, society_id, move_out_date);
@@ -240,114 +653,438 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_membership_primary_active
     ON household_memberships (society_id, unit_id)
     WHERE is_primary_contact = TRUE AND move_out_date IS NULL;
 
-CREATE TABLE IF NOT EXISTS vehicles (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id      UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    unit_id         UUID NOT NULL REFERENCES units(id) ON DELETE CASCADE,
-    owner_user_id   UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    registration_no VARCHAR(30) NOT NULL,
-    vehicle_type    VARCHAR(20) NOT NULL
-                    CHECK (vehicle_type IN ('TWO_WHEELER','CAR','BICYCLE','OTHER')),
-    make_model      VARCHAR(100),
-    color           VARCHAR(50),
-    parking_slot    VARCHAR(50),
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version         BIGINT NOT NULL DEFAULT 0,
-    UNIQUE (society_id, registration_no)
-);
+CREATE TABLE IF NOT EXISTS vehicles
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    unit_id UUID NOT NULL REFERENCES units
+(
+    id
+)
+  ON DELETE CASCADE,
+    owner_user_id UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    registration_no VARCHAR
+(
+    30
+) NOT NULL,
+    vehicle_type VARCHAR
+(
+    20
+) NOT NULL
+    CHECK
+(
+    vehicle_type
+    IN
+(
+    'TWO_WHEELER',
+    'CAR',
+    'BICYCLE',
+    'OTHER'
+)),
+    make_model VARCHAR
+(
+    100
+),
+    color VARCHAR
+(
+    50
+),
+    parking_slot VARCHAR
+(
+    50
+),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    UNIQUE
+(
+    society_id,
+    registration_no
+)
+    );
 
-CREATE TABLE IF NOT EXISTS society_settings (
-    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id     UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    setting_key    VARCHAR(100) NOT NULL,
-    setting_value  JSONB NOT NULL,
-    description    VARCHAR(500),
+CREATE TABLE IF NOT EXISTS society_settings
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    setting_key VARCHAR
+(
+    100
+) NOT NULL,
+    setting_value JSONB NOT NULL,
+    description VARCHAR
+(
+    500
+),
     effective_from TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    effective_to   TIMESTAMPTZ,
-    created_by     UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version        BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT ck_setting_dates CHECK (effective_to IS NULL OR effective_to > effective_from),
-    UNIQUE (society_id, setting_key, effective_from)
-);
+    effective_to TIMESTAMPTZ,
+    created_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_setting_dates CHECK
+(
+    effective_to
+    IS
+    NULL
+    OR
+    effective_to >
+    effective_from
+),
+    UNIQUE
+(
+    society_id,
+    setting_key,
+    effective_from
+)
+    );
 
 /* ================================================================
    4. BILLING, INVOICES AND PAYMENTS
    ================================================================ */
 
-CREATE TABLE IF NOT EXISTS charge_heads (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id        UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    code              VARCHAR(40) NOT NULL,
-    name              VARCHAR(120) NOT NULL,
-    description       VARCHAR(500),
-    calculation_type  VARCHAR(30) NOT NULL DEFAULT 'FLAT'
-                      CHECK (calculation_type IN ('FLAT','AREA_BASED','UNIT_TYPE','METERED','MANUAL')),
-    default_amount    NUMERIC(19,2) CHECK (default_amount IS NULL OR default_amount >= 0),
-    tax_percentage    NUMERIC(7,4) NOT NULL DEFAULT 0 CHECK (tax_percentage BETWEEN 0 AND 100),
-    is_recurring      BOOLEAN NOT NULL DEFAULT TRUE,
-    is_active         BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version           BIGINT NOT NULL DEFAULT 0,
-    UNIQUE (society_id, code)
-);
+CREATE TABLE IF NOT EXISTS charge_heads
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    code VARCHAR
+(
+    40
+) NOT NULL,
+    name VARCHAR
+(
+    120
+) NOT NULL,
+    description VARCHAR
+(
+    500
+),
+    calculation_type VARCHAR
+(
+    30
+) NOT NULL DEFAULT 'FLAT'
+    CHECK
+(
+    calculation_type
+    IN
+(
+    'FLAT',
+    'AREA_BASED',
+    'UNIT_TYPE',
+    'METERED',
+    'MANUAL'
+)),
+    default_amount NUMERIC
+(
+    19,
+    2
+) CHECK
+(
+    default_amount
+    IS
+    NULL
+    OR
+    default_amount
+    >=
+    0
+),
+    tax_percentage NUMERIC
+(
+    7,
+    4
+) NOT NULL DEFAULT 0 CHECK
+(
+    tax_percentage
+    BETWEEN
+    0
+    AND
+    100
+),
+    is_recurring BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    UNIQUE
+(
+    society_id,
+    code
+)
+    );
 
-CREATE TABLE IF NOT EXISTS billing_runs (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id      UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    run_number      VARCHAR(60) NOT NULL,
-    billing_period  VARCHAR(20) NOT NULL,
-    period_start    DATE NOT NULL,
-    period_end      DATE NOT NULL,
-    due_date        DATE NOT NULL,
-    status          VARCHAR(20) NOT NULL DEFAULT 'DRAFT'
-                    CHECK (status IN ('DRAFT','CALCULATING','READY','PUBLISHED','FAILED','CANCELLED')),
-    total_units     INTEGER NOT NULL DEFAULT 0 CHECK (total_units >= 0),
-    total_amount    NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
-    error_summary   JSONB,
-    created_by      UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    published_by    UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    published_at    TIMESTAMPTZ,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version         BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT ck_billing_period CHECK (period_end >= period_start),
-    CONSTRAINT ck_billing_due_date CHECK (due_date >= period_start),
-    UNIQUE (society_id, run_number)
-);
+CREATE TABLE IF NOT EXISTS billing_runs
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    run_number VARCHAR
+(
+    60
+) NOT NULL,
+    billing_period VARCHAR
+(
+    20
+) NOT NULL,
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
+    due_date DATE NOT NULL,
+    status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'DRAFT'
+    CHECK
+(
+    status
+    IN
+(
+    'DRAFT',
+    'CALCULATING',
+    'READY',
+    'PUBLISHED',
+    'FAILED',
+    'CANCELLED'
+)),
+    total_units INTEGER NOT NULL DEFAULT 0 CHECK
+(
+    total_units
+    >=
+    0
+),
+    total_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    total_amount
+    >=
+    0
+),
+    error_summary JSONB,
+    created_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    published_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    published_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_billing_period CHECK
+(
+    period_end
+    >=
+    period_start
+),
+    CONSTRAINT ck_billing_due_date CHECK
+(
+    due_date
+    >=
+    period_start
+),
+    UNIQUE
+(
+    society_id,
+    run_number
+)
+    );
 
-CREATE TABLE IF NOT EXISTS invoices (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id          UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    billing_run_id      UUID REFERENCES billing_runs(id) ON DELETE SET NULL,
-    unit_id             UUID NOT NULL REFERENCES units(id) ON DELETE RESTRICT,
-    invoice_number      VARCHAR(80) NOT NULL,
-    billing_period      VARCHAR(20) NOT NULL,
-    invoice_date        DATE NOT NULL,
-    due_date            DATE NOT NULL,
-    currency_code       CHAR(3) NOT NULL DEFAULT 'INR',
-    subtotal_amount     NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (subtotal_amount >= 0),
-    tax_amount          NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (tax_amount >= 0),
-    adjustment_amount   NUMERIC(19,2) NOT NULL DEFAULT 0,
-    total_amount        NUMERIC(19,2) NOT NULL CHECK (total_amount >= 0),
-    paid_amount         NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (paid_amount >= 0),
-    outstanding_amount  NUMERIC(19,2) NOT NULL CHECK (outstanding_amount >= 0),
-    status              VARCHAR(30) NOT NULL DEFAULT 'DRAFT'
-                        CHECK (status IN ('DRAFT','PUBLISHED','PARTIALLY_PAID','PAID','OVERDUE','CANCELLED','ADJUSTED')),
-    notes               VARCHAR(1000),
-    published_at        TIMESTAMPTZ,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version             BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT ck_invoice_due_date CHECK (due_date >= invoice_date),
-    CONSTRAINT ck_invoice_paid CHECK (paid_amount <= total_amount),
-    CONSTRAINT ck_invoice_outstanding CHECK (outstanding_amount = total_amount - paid_amount),
-    UNIQUE (society_id, invoice_number)
-);
+CREATE TABLE IF NOT EXISTS invoices
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    billing_run_id UUID REFERENCES billing_runs
+(
+    id
+)
+  ON DELETE SET NULL,
+    unit_id UUID NOT NULL REFERENCES units
+(
+    id
+)
+  ON DELETE RESTRICT,
+    invoice_number VARCHAR
+(
+    80
+) NOT NULL,
+    billing_period VARCHAR
+(
+    20
+) NOT NULL,
+    invoice_date DATE NOT NULL,
+    due_date DATE NOT NULL,
+    currency_code CHAR
+(
+    3
+) NOT NULL DEFAULT 'INR',
+    subtotal_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    subtotal_amount
+    >=
+    0
+),
+    tax_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    tax_amount
+    >=
+    0
+),
+    adjustment_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0,
+    total_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL CHECK
+(
+    total_amount
+    >=
+    0
+),
+    paid_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    paid_amount
+    >=
+    0
+),
+    outstanding_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL CHECK
+(
+    outstanding_amount
+    >=
+    0
+),
+    status VARCHAR
+(
+    30
+) NOT NULL DEFAULT 'DRAFT'
+    CHECK
+(
+    status
+    IN
+(
+    'DRAFT',
+    'PUBLISHED',
+    'PARTIALLY_PAID',
+    'PAID',
+    'OVERDUE',
+    'CANCELLED',
+    'ADJUSTED'
+)),
+    notes VARCHAR
+(
+    1000
+),
+    published_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_invoice_due_date CHECK
+(
+    due_date
+    >=
+    invoice_date
+),
+    CONSTRAINT ck_invoice_paid CHECK
+(
+    paid_amount
+    <=
+    total_amount
+),
+    CONSTRAINT ck_invoice_outstanding CHECK
+(
+    outstanding_amount =
+    total_amount
+    -
+    paid_amount
+),
+    UNIQUE
+(
+    society_id,
+    invoice_number
+)
+    );
 
 CREATE INDEX IF NOT EXISTS ix_invoices_unit_status_due
     ON invoices (society_id, unit_id, status, due_date);
@@ -355,71 +1092,329 @@ CREATE INDEX IF NOT EXISTS ix_invoices_overdue
     ON invoices (society_id, due_date)
     WHERE status IN ('PUBLISHED','PARTIALLY_PAID','OVERDUE');
 
-CREATE TABLE IF NOT EXISTS invoice_lines (
-    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id     UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    invoice_id     UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
-    charge_head_id UUID REFERENCES charge_heads(id) ON DELETE SET NULL,
-    line_number    INTEGER NOT NULL CHECK (line_number > 0),
-    description    VARCHAR(300) NOT NULL,
-    quantity       NUMERIC(19,4) NOT NULL DEFAULT 1 CHECK (quantity > 0),
-    unit_rate      NUMERIC(19,4) NOT NULL CHECK (unit_rate >= 0),
-    taxable_amount NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (taxable_amount >= 0),
-    tax_percentage NUMERIC(7,4) NOT NULL DEFAULT 0 CHECK (tax_percentage BETWEEN 0 AND 100),
-    tax_amount     NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (tax_amount >= 0),
-    line_total     NUMERIC(19,2) NOT NULL CHECK (line_total >= 0),
-    metadata       JSONB,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (invoice_id, line_number)
-);
+CREATE TABLE IF NOT EXISTS invoice_lines
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    invoice_id UUID NOT NULL REFERENCES invoices
+(
+    id
+)
+  ON DELETE CASCADE,
+    charge_head_id UUID REFERENCES charge_heads
+(
+    id
+)
+  ON DELETE SET NULL,
+    line_number INTEGER NOT NULL CHECK
+(
+    line_number >
+    0
+),
+    description VARCHAR
+(
+    300
+) NOT NULL,
+    quantity NUMERIC
+(
+    19,
+    4
+) NOT NULL DEFAULT 1 CHECK
+(
+    quantity >
+    0
+),
+    unit_rate NUMERIC
+(
+    19,
+    4
+) NOT NULL CHECK
+(
+    unit_rate
+    >=
+    0
+),
+    taxable_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    taxable_amount
+    >=
+    0
+),
+    tax_percentage NUMERIC
+(
+    7,
+    4
+) NOT NULL DEFAULT 0 CHECK
+(
+    tax_percentage
+    BETWEEN
+    0
+    AND
+    100
+),
+    tax_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    tax_amount
+    >=
+    0
+),
+    line_total NUMERIC
+(
+    19,
+    2
+) NOT NULL CHECK
+(
+    line_total
+    >=
+    0
+),
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE
+(
+    invoice_id,
+    line_number
+)
+    );
 
-CREATE TABLE IF NOT EXISTS invoice_adjustments (
-    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id     UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    invoice_id     UUID NOT NULL REFERENCES invoices(id) ON DELETE RESTRICT,
-    adjustment_no  VARCHAR(80) NOT NULL,
-    adjustment_type VARCHAR(20) NOT NULL CHECK (adjustment_type IN ('DEBIT','CREDIT','WAIVER')),
-    amount         NUMERIC(19,2) NOT NULL CHECK (amount > 0),
-    reason         VARCHAR(1000) NOT NULL,
-    status         VARCHAR(20) NOT NULL DEFAULT 'PENDING'
-                   CHECK (status IN ('PENDING','APPROVED','REJECTED','APPLIED','CANCELLED')),
-    requested_by   UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    approved_by    UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    approved_at    TIMESTAMPTZ,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version        BIGINT NOT NULL DEFAULT 0,
-    UNIQUE (society_id, adjustment_no)
-);
+CREATE TABLE IF NOT EXISTS invoice_adjustments
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    invoice_id UUID NOT NULL REFERENCES invoices
+(
+    id
+)
+  ON DELETE RESTRICT,
+    adjustment_no VARCHAR
+(
+    80
+) NOT NULL,
+    adjustment_type VARCHAR
+(
+    20
+) NOT NULL CHECK
+(
+    adjustment_type
+    IN
+(
+    'DEBIT',
+    'CREDIT',
+    'WAIVER'
+)),
+    amount NUMERIC
+(
+    19,
+    2
+) NOT NULL CHECK
+(
+    amount >
+    0
+),
+    reason VARCHAR
+(
+    1000
+) NOT NULL,
+    status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'PENDING'
+    CHECK
+(
+    status
+    IN
+(
+    'PENDING',
+    'APPROVED',
+    'REJECTED',
+    'APPLIED',
+    'CANCELLED'
+)),
+    requested_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    approved_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    approved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    UNIQUE
+(
+    society_id,
+    adjustment_no
+)
+    );
 
-CREATE TABLE IF NOT EXISTS payment_attempts (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id          UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    unit_id             UUID NOT NULL REFERENCES units(id) ON DELETE RESTRICT,
-    initiated_by        UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    payment_reference   VARCHAR(100) NOT NULL,
-    idempotency_key     VARCHAR(150) NOT NULL,
-    provider            VARCHAR(30) NOT NULL,
-    provider_order_id   VARCHAR(150),
-    provider_payment_id VARCHAR(150),
-    payment_method      VARCHAR(30),
-    currency_code       CHAR(3) NOT NULL DEFAULT 'INR',
-    requested_amount    NUMERIC(19,2) NOT NULL CHECK (requested_amount > 0),
-    confirmed_amount    NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (confirmed_amount >= 0),
-    refunded_amount     NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (refunded_amount >= 0),
-    status              VARCHAR(30) NOT NULL DEFAULT 'CREATED'
-                        CHECK (status IN ('CREATED','PENDING','AUTHORIZED','CONFIRMED','FAILED','CANCELLED','REFUND_PENDING','PARTIALLY_REFUNDED','REFUNDED','DISPUTED')),
-    failure_code        VARCHAR(100),
-    failure_message     VARCHAR(500),
-    confirmed_at        TIMESTAMPTZ,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version             BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT ck_payment_confirmed CHECK (confirmed_amount <= requested_amount),
-    CONSTRAINT ck_payment_refunded CHECK (refunded_amount <= confirmed_amount),
-    UNIQUE (society_id, payment_reference),
-    UNIQUE (society_id, idempotency_key)
-);
+CREATE TABLE IF NOT EXISTS payment_attempts
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    unit_id UUID NOT NULL REFERENCES units
+(
+    id
+)
+  ON DELETE RESTRICT,
+    initiated_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    payment_reference VARCHAR
+(
+    100
+) NOT NULL,
+    idempotency_key VARCHAR
+(
+    150
+) NOT NULL,
+    provider VARCHAR
+(
+    30
+) NOT NULL,
+    provider_order_id VARCHAR
+(
+    150
+),
+    provider_payment_id VARCHAR
+(
+    150
+),
+    payment_method VARCHAR
+(
+    30
+),
+    currency_code CHAR
+(
+    3
+) NOT NULL DEFAULT 'INR',
+    requested_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL CHECK
+(
+    requested_amount >
+    0
+),
+    confirmed_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    confirmed_amount
+    >=
+    0
+),
+    refunded_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    refunded_amount
+    >=
+    0
+),
+    status VARCHAR
+(
+    30
+) NOT NULL DEFAULT 'CREATED'
+    CHECK
+(
+    status
+    IN
+(
+    'CREATED',
+    'PENDING',
+    'AUTHORIZED',
+    'CONFIRMED',
+    'FAILED',
+    'CANCELLED',
+    'REFUND_PENDING',
+    'PARTIALLY_REFUNDED',
+    'REFUNDED',
+    'DISPUTED'
+)),
+    failure_code VARCHAR
+(
+    100
+),
+    failure_message VARCHAR
+(
+    500
+),
+    confirmed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_payment_confirmed CHECK
+(
+    confirmed_amount
+    <=
+    requested_amount
+),
+    CONSTRAINT ck_payment_refunded CHECK
+(
+    refunded_amount
+    <=
+    confirmed_amount
+),
+    UNIQUE
+(
+    society_id,
+    payment_reference
+),
+    UNIQUE
+(
+    society_id,
+    idempotency_key
+)
+    );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_payment_provider_payment
     ON payment_attempts (provider, provider_payment_id)
@@ -427,82 +1422,287 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_payment_provider_payment
 CREATE INDEX IF NOT EXISTS ix_payment_unit_status
     ON payment_attempts (society_id, unit_id, status, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS payment_events (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id        UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    payment_attempt_id UUID REFERENCES payment_attempts(id) ON DELETE SET NULL,
-    provider          VARCHAR(30) NOT NULL,
-    provider_event_id VARCHAR(180) NOT NULL,
-    event_type        VARCHAR(100) NOT NULL,
-    signature_valid   BOOLEAN NOT NULL,
-    event_timestamp   TIMESTAMPTZ,
-    payload           JSONB NOT NULL,
-    processing_status VARCHAR(20) NOT NULL DEFAULT 'RECEIVED'
-                      CHECK (processing_status IN ('RECEIVED','PROCESSED','IGNORED','FAILED')),
-    error_message     VARCHAR(1000),
-    received_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    processed_at      TIMESTAMPTZ,
-    UNIQUE (provider, provider_event_id)
-);
+CREATE TABLE IF NOT EXISTS payment_events
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    payment_attempt_id UUID REFERENCES payment_attempts
+(
+    id
+)
+  ON DELETE SET NULL,
+    provider VARCHAR
+(
+    30
+) NOT NULL,
+    provider_event_id VARCHAR
+(
+    180
+) NOT NULL,
+    event_type VARCHAR
+(
+    100
+) NOT NULL,
+    signature_valid BOOLEAN NOT NULL,
+    event_timestamp TIMESTAMPTZ,
+    payload JSONB NOT NULL,
+    processing_status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'RECEIVED'
+    CHECK
+(
+    processing_status
+    IN
+(
+    'RECEIVED',
+    'PROCESSED',
+    'IGNORED',
+    'FAILED'
+)),
+    error_message VARCHAR
+(
+    1000
+),
+    received_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    processed_at TIMESTAMPTZ,
+    UNIQUE
+(
+    provider,
+    provider_event_id
+)
+    );
 
-CREATE TABLE IF NOT EXISTS payment_allocations (
-    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id         UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    payment_attempt_id UUID NOT NULL REFERENCES payment_attempts(id) ON DELETE RESTRICT,
-    invoice_id         UUID NOT NULL REFERENCES invoices(id) ON DELETE RESTRICT,
-    allocated_amount   NUMERIC(19,2) NOT NULL CHECK (allocated_amount > 0),
-    allocated_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    reversed_amount    NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (reversed_amount >= 0),
-    CONSTRAINT ck_allocation_reversal CHECK (reversed_amount <= allocated_amount),
-    UNIQUE (payment_attempt_id, invoice_id)
-);
+CREATE TABLE IF NOT EXISTS payment_allocations
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    payment_attempt_id UUID NOT NULL REFERENCES payment_attempts
+(
+    id
+)
+  ON DELETE RESTRICT,
+    invoice_id UUID NOT NULL REFERENCES invoices
+(
+    id
+)
+  ON DELETE RESTRICT,
+    allocated_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL CHECK
+(
+    allocated_amount >
+    0
+),
+    allocated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reversed_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    reversed_amount
+    >=
+    0
+),
+    CONSTRAINT ck_allocation_reversal CHECK
+(
+    reversed_amount
+    <=
+    allocated_amount
+),
+    UNIQUE
+(
+    payment_attempt_id,
+    invoice_id
+)
+    );
 
-CREATE TABLE IF NOT EXISTS receipts (
-    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id         UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    payment_attempt_id UUID NOT NULL UNIQUE REFERENCES payment_attempts(id) ON DELETE RESTRICT,
-    receipt_number     VARCHAR(80) NOT NULL,
-    receipt_date       DATE NOT NULL,
-    amount             NUMERIC(19,2) NOT NULL CHECK (amount > 0),
-    currency_code      CHAR(3) NOT NULL DEFAULT 'INR',
-    document_url       VARCHAR(500),
-    created_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (society_id, receipt_number)
-);
+CREATE TABLE IF NOT EXISTS receipts
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    payment_attempt_id UUID NOT NULL UNIQUE REFERENCES payment_attempts
+(
+    id
+)
+  ON DELETE RESTRICT,
+    receipt_number VARCHAR
+(
+    80
+) NOT NULL,
+    receipt_date DATE NOT NULL,
+    amount NUMERIC
+(
+    19,
+    2
+) NOT NULL CHECK
+(
+    amount >
+    0
+),
+    currency_code CHAR
+(
+    3
+) NOT NULL DEFAULT 'INR',
+    document_url VARCHAR
+(
+    500
+),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE
+(
+    society_id,
+    receipt_number
+)
+    );
 
 /* ================================================================
    5. COMPLAINTS AND WORK ORDERS
    ================================================================ */
 
-CREATE TABLE IF NOT EXISTS complaints (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id          UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    unit_id             UUID REFERENCES units(id) ON DELETE SET NULL,
-    complaint_number    VARCHAR(80) NOT NULL,
-    reported_by         UUID NOT NULL REFERENCES app_users(id) ON DELETE RESTRICT,
-    category            VARCHAR(60) NOT NULL,
-    subcategory         VARCHAR(80),
-    subject             VARCHAR(200) NOT NULL,
-    description         TEXT NOT NULL,
-    location_details    VARCHAR(300),
-    priority            VARCHAR(20) NOT NULL DEFAULT 'MEDIUM'
-                        CHECK (priority IN ('LOW','MEDIUM','HIGH','CRITICAL')),
-    status              VARCHAR(30) NOT NULL DEFAULT 'OPEN'
-                        CHECK (status IN ('OPEN','UNDER_REVIEW','ASSIGNED','IN_PROGRESS','WAITING_FOR_RESIDENT','RESOLVED','CLOSED','REOPENED','REJECTED')),
-    assigned_user_id    UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    sla_due_at          TIMESTAMPTZ,
-    preferred_visit_at  TIMESTAMPTZ,
-    entry_permission    BOOLEAN NOT NULL DEFAULT FALSE,
-    resolution_summary  TEXT,
-    resolved_at         TIMESTAMPTZ,
-    closed_at           TIMESTAMPTZ,
-    resident_rating     SMALLINT CHECK (resident_rating BETWEEN 1 AND 5),
-    resident_feedback   VARCHAR(1000),
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version             BIGINT NOT NULL DEFAULT 0,
-    UNIQUE (society_id, complaint_number)
-);
+CREATE TABLE IF NOT EXISTS complaints
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    unit_id UUID REFERENCES units
+(
+    id
+)
+  ON DELETE SET NULL,
+    complaint_number VARCHAR
+(
+    80
+) NOT NULL,
+    reported_by UUID NOT NULL REFERENCES app_users
+(
+    id
+)
+  ON DELETE RESTRICT,
+    category VARCHAR
+(
+    60
+) NOT NULL,
+    subcategory VARCHAR
+(
+    80
+),
+    subject VARCHAR
+(
+    200
+) NOT NULL,
+    description TEXT NOT NULL,
+    location_details VARCHAR
+(
+    300
+),
+    priority VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'MEDIUM'
+    CHECK
+(
+    priority
+    IN
+(
+    'LOW',
+    'MEDIUM',
+    'HIGH',
+    'CRITICAL'
+)),
+    status VARCHAR
+(
+    30
+) NOT NULL DEFAULT 'OPEN'
+    CHECK
+(
+    status
+    IN
+(
+    'OPEN',
+    'UNDER_REVIEW',
+    'ASSIGNED',
+    'IN_PROGRESS',
+    'WAITING_FOR_RESIDENT',
+    'RESOLVED',
+    'CLOSED',
+    'REOPENED',
+    'REJECTED'
+)),
+    assigned_user_id UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    sla_due_at TIMESTAMPTZ,
+    preferred_visit_at TIMESTAMPTZ,
+    entry_permission BOOLEAN NOT NULL DEFAULT FALSE,
+    resolution_summary TEXT,
+    resolved_at TIMESTAMPTZ,
+    closed_at TIMESTAMPTZ,
+    resident_rating SMALLINT CHECK
+(
+    resident_rating
+    BETWEEN
+    1
+    AND
+    5
+),
+    resident_feedback VARCHAR
+(
+    1000
+),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    UNIQUE
+(
+    society_id,
+    complaint_number
+)
+    );
 
 CREATE INDEX IF NOT EXISTS ix_complaints_status_priority
     ON complaints (society_id, status, priority, created_at DESC);
@@ -510,113 +1710,402 @@ CREATE INDEX IF NOT EXISTS ix_complaints_sla
     ON complaints (society_id, sla_due_at)
     WHERE status NOT IN ('CLOSED','REJECTED');
 
-CREATE TABLE IF NOT EXISTS work_orders (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id          UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    complaint_id        UUID REFERENCES complaints(id) ON DELETE SET NULL,
-    work_order_number   VARCHAR(80) NOT NULL,
-    title               VARCHAR(200) NOT NULL,
-    description         TEXT,
-    assigned_user_id    UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    assigned_vendor_name VARCHAR(200),
-    priority            VARCHAR(20) NOT NULL DEFAULT 'MEDIUM'
-                        CHECK (priority IN ('LOW','MEDIUM','HIGH','CRITICAL')),
-    status              VARCHAR(30) NOT NULL DEFAULT 'CREATED'
-                        CHECK (status IN ('CREATED','ASSIGNED','ACCEPTED','IN_PROGRESS','ON_HOLD','COMPLETED','VERIFIED','CANCELLED')),
-    scheduled_at        TIMESTAMPTZ,
-    due_at              TIMESTAMPTZ,
-    started_at          TIMESTAMPTZ,
-    completed_at        TIMESTAMPTZ,
-    completion_notes    TEXT,
-    estimated_cost      NUMERIC(19,2) CHECK (estimated_cost IS NULL OR estimated_cost >= 0),
-    actual_cost         NUMERIC(19,2) CHECK (actual_cost IS NULL OR actual_cost >= 0),
-    created_by          UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version             BIGINT NOT NULL DEFAULT 0,
-    UNIQUE (society_id, work_order_number)
-);
+CREATE TABLE IF NOT EXISTS work_orders
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    complaint_id UUID REFERENCES complaints
+(
+    id
+)
+  ON DELETE SET NULL,
+    work_order_number VARCHAR
+(
+    80
+) NOT NULL,
+    title VARCHAR
+(
+    200
+) NOT NULL,
+    description TEXT,
+    assigned_user_id UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    assigned_vendor_name VARCHAR
+(
+    200
+),
+    priority VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'MEDIUM'
+    CHECK
+(
+    priority
+    IN
+(
+    'LOW',
+    'MEDIUM',
+    'HIGH',
+    'CRITICAL'
+)),
+    status VARCHAR
+(
+    30
+) NOT NULL DEFAULT 'CREATED'
+    CHECK
+(
+    status
+    IN
+(
+    'CREATED',
+    'ASSIGNED',
+    'ACCEPTED',
+    'IN_PROGRESS',
+    'ON_HOLD',
+    'COMPLETED',
+    'VERIFIED',
+    'CANCELLED'
+)),
+    scheduled_at TIMESTAMPTZ,
+    due_at TIMESTAMPTZ,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    completion_notes TEXT,
+    estimated_cost NUMERIC
+(
+    19,
+    2
+) CHECK
+(
+    estimated_cost
+    IS
+    NULL
+    OR
+    estimated_cost
+    >=
+    0
+),
+    actual_cost NUMERIC
+(
+    19,
+    2
+) CHECK
+(
+    actual_cost
+    IS
+    NULL
+    OR
+    actual_cost
+    >=
+    0
+),
+    created_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    UNIQUE
+(
+    society_id,
+    work_order_number
+)
+    );
 
 CREATE INDEX IF NOT EXISTS ix_work_orders_assignee
     ON work_orders (society_id, assigned_user_id, status, due_at);
 
-CREATE TABLE IF NOT EXISTS complaint_comments (
-    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id     UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    complaint_id   UUID NOT NULL REFERENCES complaints(id) ON DELETE CASCADE,
-    author_user_id UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    comment_text   TEXT NOT NULL,
-    is_internal    BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE TABLE IF NOT EXISTS complaint_comments
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    complaint_id UUID NOT NULL REFERENCES complaints
+(
+    id
+)
+  ON DELETE CASCADE,
+    author_user_id UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    comment_text TEXT NOT NULL,
+    is_internal BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
 
-CREATE TABLE IF NOT EXISTS complaint_status_history (
-    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id     UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    complaint_id   UUID NOT NULL REFERENCES complaints(id) ON DELETE CASCADE,
-    old_status     VARCHAR(30),
-    new_status     VARCHAR(30) NOT NULL,
-    changed_by     UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    reason         VARCHAR(1000),
-    changed_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE TABLE IF NOT EXISTS complaint_status_history
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    complaint_id UUID NOT NULL REFERENCES complaints
+(
+    id
+)
+  ON DELETE CASCADE,
+    old_status VARCHAR
+(
+    30
+),
+    new_status VARCHAR
+(
+    30
+) NOT NULL,
+    changed_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    reason VARCHAR
+(
+    1000
+),
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
 
 /* ================================================================
    6. VISITOR AND ACCESS MANAGEMENT
    ================================================================ */
 
-CREATE TABLE IF NOT EXISTS visitor_approvals (
-    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id           UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    unit_id              UUID NOT NULL REFERENCES units(id) ON DELETE CASCADE,
-    approval_code        VARCHAR(40) NOT NULL,
-    created_by           UUID NOT NULL REFERENCES app_users(id) ON DELETE RESTRICT,
-    visitor_name         VARCHAR(150) NOT NULL,
-    visitor_mobile       VARCHAR(30),
-    visitor_type         VARCHAR(30) NOT NULL
-                         CHECK (visitor_type IN ('GUEST','DELIVERY','CAB','DOMESTIC_HELP','TECHNICIAN','VENDOR','EMERGENCY','OTHER')),
-    expected_from        TIMESTAMPTZ NOT NULL,
-    valid_until          TIMESTAMPTZ NOT NULL,
-    number_of_visitors   INTEGER NOT NULL DEFAULT 1 CHECK (number_of_visitors > 0),
-    vehicle_number       VARCHAR(30),
-    purpose              VARCHAR(300),
-    instructions         VARCHAR(500),
-    multiple_entry       BOOLEAN NOT NULL DEFAULT FALSE,
-    max_entry_count      INTEGER NOT NULL DEFAULT 1 CHECK (max_entry_count > 0),
-    used_entry_count     INTEGER NOT NULL DEFAULT 0 CHECK (used_entry_count >= 0),
-    status               VARCHAR(20) NOT NULL DEFAULT 'APPROVED'
-                         CHECK (status IN ('APPROVED','CHECKED_IN','COMPLETED','CANCELLED','EXPIRED','REJECTED')),
-    created_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version              BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT ck_visitor_validity CHECK (valid_until > expected_from),
-    CONSTRAINT ck_visitor_entries CHECK (used_entry_count <= max_entry_count),
-    UNIQUE (society_id, approval_code)
-);
+CREATE TABLE IF NOT EXISTS visitor_approvals
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    unit_id UUID NOT NULL REFERENCES units
+(
+    id
+)
+  ON DELETE CASCADE,
+    approval_code VARCHAR
+(
+    40
+) NOT NULL,
+    created_by UUID NOT NULL REFERENCES app_users
+(
+    id
+)
+  ON DELETE RESTRICT,
+    visitor_name VARCHAR
+(
+    150
+) NOT NULL,
+    visitor_mobile VARCHAR
+(
+    30
+),
+    visitor_type VARCHAR
+(
+    30
+) NOT NULL
+    CHECK
+(
+    visitor_type
+    IN
+(
+    'GUEST',
+    'DELIVERY',
+    'CAB',
+    'DOMESTIC_HELP',
+    'TECHNICIAN',
+    'VENDOR',
+    'EMERGENCY',
+    'OTHER'
+)),
+    expected_from TIMESTAMPTZ NOT NULL,
+    valid_until TIMESTAMPTZ NOT NULL,
+    number_of_visitors INTEGER NOT NULL DEFAULT 1 CHECK
+(
+    number_of_visitors >
+    0
+),
+    vehicle_number VARCHAR
+(
+    30
+),
+    purpose VARCHAR
+(
+    300
+),
+    instructions VARCHAR
+(
+    500
+),
+    multiple_entry BOOLEAN NOT NULL DEFAULT FALSE,
+    max_entry_count INTEGER NOT NULL DEFAULT 1 CHECK
+(
+    max_entry_count >
+    0
+),
+    used_entry_count INTEGER NOT NULL DEFAULT 0 CHECK
+(
+    used_entry_count
+    >=
+    0
+),
+    status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'APPROVED'
+    CHECK
+(
+    status
+    IN
+(
+    'APPROVED',
+    'CHECKED_IN',
+    'COMPLETED',
+    'CANCELLED',
+    'EXPIRED',
+    'REJECTED'
+)),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_visitor_validity CHECK
+(
+    valid_until >
+    expected_from
+),
+    CONSTRAINT ck_visitor_entries CHECK
+(
+    used_entry_count
+    <=
+    max_entry_count
+),
+    UNIQUE
+(
+    society_id,
+    approval_code
+)
+    );
 
 CREATE INDEX IF NOT EXISTS ix_visitors_expected
     ON visitor_approvals (society_id, expected_from, status);
 CREATE INDEX IF NOT EXISTS ix_visitors_unit
     ON visitor_approvals (society_id, unit_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS visitor_entries (
-    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id           UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    visitor_approval_id  UUID REFERENCES visitor_approvals(id) ON DELETE SET NULL,
-    unit_id              UUID NOT NULL REFERENCES units(id) ON DELETE RESTRICT,
-    visitor_name         VARCHAR(150) NOT NULL,
-    visitor_mobile       VARCHAR(30),
-    vehicle_number       VARCHAR(30),
-    entry_type           VARCHAR(20) NOT NULL DEFAULT 'APPROVED'
-                         CHECK (entry_type IN ('APPROVED','MANUAL','EMERGENCY')),
-    check_in_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    checked_in_by        UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    check_out_at         TIMESTAMPTZ,
-    checked_out_by       UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    exception_reason     VARCHAR(1000),
-    created_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT ck_visitor_checkout CHECK (check_out_at IS NULL OR check_out_at >= check_in_at)
-);
+CREATE TABLE IF NOT EXISTS visitor_entries
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    visitor_approval_id UUID REFERENCES visitor_approvals
+(
+    id
+)
+  ON DELETE SET NULL,
+    unit_id UUID NOT NULL REFERENCES units
+(
+    id
+)
+  ON DELETE RESTRICT,
+    visitor_name VARCHAR
+(
+    150
+) NOT NULL,
+    visitor_mobile VARCHAR
+(
+    30
+),
+    vehicle_number VARCHAR
+(
+    30
+),
+    entry_type VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'APPROVED'
+    CHECK
+(
+    entry_type
+    IN
+(
+    'APPROVED',
+    'MANUAL',
+    'EMERGENCY'
+)),
+    check_in_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    checked_in_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    check_out_at TIMESTAMPTZ,
+    checked_out_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    exception_reason VARCHAR
+(
+    1000
+),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_visitor_checkout CHECK
+(
+    check_out_at
+    IS
+    NULL
+    OR
+    check_out_at
+    >=
+    check_in_at
+)
+    );
 
 CREATE INDEX IF NOT EXISTS ix_visitor_entries_inside
     ON visitor_entries (society_id, check_in_at DESC)
@@ -626,70 +2115,244 @@ CREATE INDEX IF NOT EXISTS ix_visitor_entries_inside
    7. FACILITIES AND BOOKINGS
    ================================================================ */
 
-CREATE TABLE IF NOT EXISTS facilities (
-    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id            UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    code                  VARCHAR(40) NOT NULL,
-    name                  VARCHAR(150) NOT NULL,
-    description           TEXT,
-    location              VARCHAR(200),
-    capacity              INTEGER CHECK (capacity IS NULL OR capacity > 0),
-    image_url             VARCHAR(500),
-    opening_time          TIME,
-    closing_time          TIME,
-    slot_duration_minutes INTEGER CHECK (slot_duration_minutes IS NULL OR slot_duration_minutes > 0),
-    booking_fee           NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (booking_fee >= 0),
-    deposit_amount        NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (deposit_amount >= 0),
-    cancellation_hours    INTEGER NOT NULL DEFAULT 0 CHECK (cancellation_hours >= 0),
-    rules                 TEXT,
-    status                VARCHAR(30) NOT NULL DEFAULT 'AVAILABLE'
-                          CHECK (status IN ('AVAILABLE','UNAVAILABLE','UNDER_MAINTENANCE','INACTIVE')),
-    created_at            TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at            TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version               BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT ck_facility_hours CHECK (closing_time IS NULL OR opening_time IS NULL OR closing_time > opening_time),
-    UNIQUE (society_id, code)
-);
+CREATE TABLE IF NOT EXISTS facilities
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    code VARCHAR
+(
+    40
+) NOT NULL,
+    name VARCHAR
+(
+    150
+) NOT NULL,
+    description TEXT,
+    location VARCHAR
+(
+    200
+),
+    capacity INTEGER CHECK
+(
+    capacity
+    IS
+    NULL
+    OR
+    capacity >
+    0
+),
+    image_url VARCHAR
+(
+    500
+),
+    opening_time TIME,
+    closing_time TIME,
+    slot_duration_minutes INTEGER CHECK
+(
+    slot_duration_minutes
+    IS
+    NULL
+    OR
+    slot_duration_minutes >
+    0
+),
+    booking_fee NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    booking_fee
+    >=
+    0
+),
+    deposit_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    deposit_amount
+    >=
+    0
+),
+    cancellation_hours INTEGER NOT NULL DEFAULT 0 CHECK
+(
+    cancellation_hours
+    >=
+    0
+),
+    rules TEXT,
+    status VARCHAR
+(
+    30
+) NOT NULL DEFAULT 'AVAILABLE'
+    CHECK
+(
+    status
+    IN
+(
+    'AVAILABLE',
+    'UNAVAILABLE',
+    'UNDER_MAINTENANCE',
+    'INACTIVE'
+)),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_facility_hours CHECK
+(
+    closing_time
+    IS
+    NULL
+    OR
+    opening_time
+    IS
+    NULL
+    OR
+    closing_time >
+    opening_time
+),
+    UNIQUE
+(
+    society_id,
+    code
+)
+    );
 
-CREATE TABLE IF NOT EXISTS facility_bookings (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id          UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    facility_id         UUID NOT NULL REFERENCES facilities(id) ON DELETE RESTRICT,
-    unit_id             UUID NOT NULL REFERENCES units(id) ON DELETE RESTRICT,
-    booked_by           UUID NOT NULL REFERENCES app_users(id) ON DELETE RESTRICT,
-    booking_number      VARCHAR(80) NOT NULL,
-    start_at            TIMESTAMPTZ NOT NULL,
-    end_at              TIMESTAMPTZ NOT NULL,
-    participant_count   INTEGER NOT NULL DEFAULT 1 CHECK (participant_count > 0),
-    purpose             VARCHAR(500),
-    booking_amount      NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (booking_amount >= 0),
-    deposit_amount      NUMERIC(19,2) NOT NULL DEFAULT 0 CHECK (deposit_amount >= 0),
-    status              VARCHAR(30) NOT NULL DEFAULT 'CONFIRMED'
-                        CHECK (status IN ('PENDING','CONFIRMED','CHECKED_IN','COMPLETED','CANCELLED','REJECTED','NO_SHOW')),
-    cancellation_reason VARCHAR(500),
-    cancelled_by        UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    cancelled_at        TIMESTAMPTZ,
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version             BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT ck_booking_time CHECK (end_at > start_at),
-    UNIQUE (society_id, booking_number)
-);
+CREATE TABLE IF NOT EXISTS facility_bookings
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    facility_id UUID NOT NULL REFERENCES facilities
+(
+    id
+)
+  ON DELETE RESTRICT,
+    unit_id UUID NOT NULL REFERENCES units
+(
+    id
+)
+  ON DELETE RESTRICT,
+    booked_by UUID NOT NULL REFERENCES app_users
+(
+    id
+)
+  ON DELETE RESTRICT,
+    booking_number VARCHAR
+(
+    80
+) NOT NULL,
+    start_at TIMESTAMPTZ NOT NULL,
+    end_at TIMESTAMPTZ NOT NULL,
+    participant_count INTEGER NOT NULL DEFAULT 1 CHECK
+(
+    participant_count >
+    0
+),
+    purpose VARCHAR
+(
+    500
+),
+    booking_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    booking_amount
+    >=
+    0
+),
+    deposit_amount NUMERIC
+(
+    19,
+    2
+) NOT NULL DEFAULT 0 CHECK
+(
+    deposit_amount
+    >=
+    0
+),
+    status VARCHAR
+(
+    30
+) NOT NULL DEFAULT 'CONFIRMED'
+    CHECK
+(
+    status
+    IN
+(
+    'PENDING',
+    'CONFIRMED',
+    'CHECKED_IN',
+    'COMPLETED',
+    'CANCELLED',
+    'REJECTED',
+    'NO_SHOW'
+)),
+    cancellation_reason VARCHAR
+(
+    500
+),
+    cancelled_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    cancelled_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_booking_time CHECK
+(
+    end_at >
+    start_at
+),
+    UNIQUE
+(
+    society_id,
+    booking_number
+)
+    );
 
 CREATE INDEX IF NOT EXISTS ix_facility_bookings_calendar
     ON facility_bookings (society_id, facility_id, start_at, end_at, status);
 
 /* Prevent overlapping active bookings for the same facility. */
-CREATE OR REPLACE FUNCTION prevent_facility_booking_overlap()
+CREATE
+OR REPLACE FUNCTION prevent_facility_booking_overlap()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
     /* Serialize active booking checks for the same facility to avoid a race
        between concurrent transactions. Hash collisions only reduce concurrency. */
-    PERFORM pg_advisory_xact_lock(hashtextextended(NEW.facility_id::TEXT, 0));
+    PERFORM
+pg_advisory_xact_lock(hashtextextended(NEW.facility_id::TEXT, 0));
 
-    IF NEW.status IN ('PENDING','CONFIRMED','CHECKED_IN') AND EXISTS (
+    IF
+NEW.status IN ('PENDING','CONFIRMED','CHECKED_IN') AND EXISTS (
         SELECT 1
         FROM facility_bookings b
         WHERE b.society_id = NEW.society_id
@@ -699,133 +2362,446 @@ BEGIN
           AND tstzrange(b.start_at, b.end_at, '[)') && tstzrange(NEW.start_at, NEW.end_at, '[)')
     ) THEN
         RAISE EXCEPTION 'Facility is already booked for the selected time';
-    END IF;
-    RETURN NEW;
+END IF;
+RETURN NEW;
 END;
 $$;
 
 DROP TRIGGER IF EXISTS trg_prevent_facility_booking_overlap ON facility_bookings;
 CREATE TRIGGER trg_prevent_facility_booking_overlap
-BEFORE INSERT OR UPDATE OF facility_id, start_at, end_at, status
+    BEFORE INSERT OR
+UPDATE OF facility_id, start_at, end_at, status
 ON facility_bookings
-FOR EACH ROW EXECUTE FUNCTION prevent_facility_booking_overlap();
+    FOR EACH ROW EXECUTE FUNCTION prevent_facility_booking_overlap();
 
 /* ================================================================
    8. NOTICES, DOCUMENTS AND NOTIFICATIONS
    ================================================================ */
 
-CREATE TABLE IF NOT EXISTS documents (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id       UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    uploaded_by      UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    category         VARCHAR(50) NOT NULL,
-    file_name        VARCHAR(255) NOT NULL,
-    object_key       VARCHAR(500) NOT NULL,
-    content_type     VARCHAR(150),
-    size_bytes       BIGINT CHECK (size_bytes IS NULL OR size_bytes >= 0),
-    checksum_sha256  VARCHAR(64),
-    access_level     VARCHAR(30) NOT NULL DEFAULT 'RESIDENTS'
-                     CHECK (access_level IN ('PRIVATE','COMMITTEE','RESIDENTS','PUBLIC')),
-    malware_status   VARCHAR(20) NOT NULL DEFAULT 'PENDING'
-                     CHECK (malware_status IN ('PENDING','CLEAN','INFECTED','FAILED')),
-    expires_at       TIMESTAMPTZ,
-    is_deleted       BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version          BIGINT NOT NULL DEFAULT 0,
-    UNIQUE (society_id, object_key)
-);
+CREATE TABLE IF NOT EXISTS documents
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    uploaded_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    category VARCHAR
+(
+    50
+) NOT NULL,
+    file_name VARCHAR
+(
+    255
+) NOT NULL,
+    object_key VARCHAR
+(
+    500
+) NOT NULL,
+    content_type VARCHAR
+(
+    150
+),
+    size_bytes BIGINT CHECK
+(
+    size_bytes
+    IS
+    NULL
+    OR
+    size_bytes
+    >=
+    0
+),
+    checksum_sha256 VARCHAR
+(
+    64
+),
+    access_level VARCHAR
+(
+    30
+) NOT NULL DEFAULT 'RESIDENTS'
+    CHECK
+(
+    access_level
+    IN
+(
+    'PRIVATE',
+    'COMMITTEE',
+    'RESIDENTS',
+    'PUBLIC'
+)),
+    malware_status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'PENDING'
+    CHECK
+(
+    malware_status
+    IN
+(
+    'PENDING',
+    'CLEAN',
+    'INFECTED',
+    'FAILED'
+)),
+    expires_at TIMESTAMPTZ,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    UNIQUE
+(
+    society_id,
+    object_key
+)
+    );
 
-CREATE TABLE IF NOT EXISTS entity_attachments (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id    UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    document_id   UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    entity_type   VARCHAR(40) NOT NULL,
-    entity_id     UUID NOT NULL,
-    attachment_type VARCHAR(40),
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (document_id, entity_type, entity_id)
-);
+CREATE TABLE IF NOT EXISTS entity_attachments
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    document_id UUID NOT NULL REFERENCES documents
+(
+    id
+)
+  ON DELETE CASCADE,
+    entity_type VARCHAR
+(
+    40
+) NOT NULL,
+    entity_id UUID NOT NULL,
+    attachment_type VARCHAR
+(
+    40
+),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE
+(
+    document_id,
+    entity_type,
+    entity_id
+)
+    );
 
 CREATE INDEX IF NOT EXISTS ix_entity_attachments_target
     ON entity_attachments (society_id, entity_type, entity_id);
 
-CREATE TABLE IF NOT EXISTS notices (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id        UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    notice_number     VARCHAR(80) NOT NULL,
-    title             VARCHAR(250) NOT NULL,
-    content           TEXT NOT NULL,
-    category          VARCHAR(30) NOT NULL
-                      CHECK (category IN ('GENERAL','EMERGENCY','MAINTENANCE','EVENT','PAYMENT','SECURITY','MEETING')),
-    priority          VARCHAR(20) NOT NULL DEFAULT 'NORMAL'
-                      CHECK (priority IN ('LOW','NORMAL','HIGH','URGENT')),
-    status            VARCHAR(20) NOT NULL DEFAULT 'DRAFT'
-                      CHECK (status IN ('DRAFT','SCHEDULED','PUBLISHED','EXPIRED','CANCELLED')),
-    publish_at        TIMESTAMPTZ,
-    expires_at        TIMESTAMPTZ,
-    created_by        UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    published_by      UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version           BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT ck_notice_dates CHECK (expires_at IS NULL OR publish_at IS NULL OR expires_at > publish_at),
-    UNIQUE (society_id, notice_number)
-);
+CREATE TABLE IF NOT EXISTS notices
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    notice_number VARCHAR
+(
+    80
+) NOT NULL,
+    title VARCHAR
+(
+    250
+) NOT NULL,
+    content TEXT NOT NULL,
+    category VARCHAR
+(
+    30
+) NOT NULL
+    CHECK
+(
+    category
+    IN
+(
+    'GENERAL',
+    'EMERGENCY',
+    'MAINTENANCE',
+    'EVENT',
+    'PAYMENT',
+    'SECURITY',
+    'MEETING'
+)),
+    priority VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'NORMAL'
+    CHECK
+(
+    priority
+    IN
+(
+    'LOW',
+    'NORMAL',
+    'HIGH',
+    'URGENT'
+)),
+    status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'DRAFT'
+    CHECK
+(
+    status
+    IN
+(
+    'DRAFT',
+    'SCHEDULED',
+    'PUBLISHED',
+    'EXPIRED',
+    'CANCELLED'
+)),
+    publish_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    created_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    published_by UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT ck_notice_dates CHECK
+(
+    expires_at
+    IS
+    NULL
+    OR
+    publish_at
+    IS
+    NULL
+    OR
+    expires_at >
+    publish_at
+),
+    UNIQUE
+(
+    society_id,
+    notice_number
+)
+    );
 
-CREATE TABLE IF NOT EXISTS notice_audiences (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    notice_id     UUID NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
-    society_id    UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    audience_type VARCHAR(30) NOT NULL
-                  CHECK (audience_type IN ('ALL','BUILDING','UNIT','ROLE','USER')),
-    target_id     UUID,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT ck_notice_target CHECK (
-        (audience_type = 'ALL' AND target_id IS NULL)
-        OR (audience_type <> 'ALL' AND target_id IS NOT NULL)
+CREATE TABLE IF NOT EXISTS notice_audiences
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    notice_id UUID NOT NULL REFERENCES notices
+(
+    id
+) ON DELETE CASCADE,
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+)
+  ON DELETE CASCADE,
+    audience_type VARCHAR
+(
+    30
+) NOT NULL
+    CHECK
+(
+    audience_type
+    IN
+(
+    'ALL',
+    'BUILDING',
+    'UNIT',
+    'ROLE',
+    'USER'
+)),
+    target_id UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_notice_target CHECK
+(
+(
+    audience_type =
+    'ALL'
+    AND
+    target_id
+    IS
+    NULL
+)
+    OR
+(
+    audience_type
+    <>
+    'ALL'
+    AND
+    target_id
+    IS
+    NOT
+    NULL
+)
     ),
-    UNIQUE (notice_id, audience_type, target_id)
-);
+    UNIQUE
+(
+    notice_id,
+    audience_type,
+    target_id
+)
+    );
 
-CREATE TABLE IF NOT EXISTS notification_templates (
-    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id     UUID REFERENCES societies(id) ON DELETE CASCADE,
-    template_code  VARCHAR(80) NOT NULL,
-    channel        VARCHAR(20) NOT NULL CHECK (channel IN ('IN_APP','EMAIL','SMS','PUSH')),
-    subject_template VARCHAR(300),
-    body_template  TEXT NOT NULL,
-    is_active      BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version        BIGINT NOT NULL DEFAULT 0
-);
+CREATE TABLE IF NOT EXISTS notification_templates
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    template_code VARCHAR
+(
+    80
+) NOT NULL,
+    channel VARCHAR
+(
+    20
+) NOT NULL CHECK
+(
+    channel
+    IN
+(
+    'IN_APP',
+    'EMAIL',
+    'SMS',
+    'PUSH'
+)),
+    subject_template VARCHAR
+(
+    300
+),
+    body_template TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0
+    );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_notification_templates_global
     ON notification_templates (template_code, channel) WHERE society_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_notification_templates_society
     ON notification_templates (society_id, template_code, channel) WHERE society_id IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS notifications (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id        UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    recipient_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-    template_code     VARCHAR(80),
-    channel           VARCHAR(20) NOT NULL CHECK (channel IN ('IN_APP','EMAIL','SMS','PUSH')),
-    subject           VARCHAR(300),
-    message           TEXT NOT NULL,
-    status            VARCHAR(20) NOT NULL DEFAULT 'PENDING'
-                      CHECK (status IN ('PENDING','SENDING','SENT','DELIVERED','FAILED','CANCELLED')),
-    provider_message_id VARCHAR(180),
-    attempt_count     INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
-    scheduled_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    sent_at           TIMESTAMPTZ,
-    delivered_at      TIMESTAMPTZ,
-    read_at           TIMESTAMPTZ,
-    error_message     VARCHAR(1000),
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE TABLE IF NOT EXISTS notifications
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    recipient_user_id UUID NOT NULL REFERENCES app_users
+(
+    id
+)
+  ON DELETE CASCADE,
+    template_code VARCHAR
+(
+    80
+),
+    channel VARCHAR
+(
+    20
+) NOT NULL CHECK
+(
+    channel
+    IN
+(
+    'IN_APP',
+    'EMAIL',
+    'SMS',
+    'PUSH'
+)),
+    subject VARCHAR
+(
+    300
+),
+    message TEXT NOT NULL,
+    status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'PENDING'
+    CHECK
+(
+    status
+    IN
+(
+    'PENDING',
+    'SENDING',
+    'SENT',
+    'DELIVERED',
+    'FAILED',
+    'CANCELLED'
+)),
+    provider_message_id VARCHAR
+(
+    180
+),
+    attempt_count INTEGER NOT NULL DEFAULT 0 CHECK
+(
+    attempt_count
+    >=
+    0
+),
+    scheduled_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
+    read_at TIMESTAMPTZ,
+    error_message VARCHAR
+(
+    1000
+),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
 
 CREATE INDEX IF NOT EXISTS ix_notifications_delivery
     ON notifications (status, scheduled_at) WHERE status IN ('PENDING','FAILED');
@@ -836,25 +2812,78 @@ CREATE INDEX IF NOT EXISTS ix_notifications_user
    9. GOVERNANCE, AUDIT, EVENTS AND INTEGRATIONS
    ================================================================ */
 
-CREATE TABLE IF NOT EXISTS audit_events (
-    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id        UUID REFERENCES societies(id) ON DELETE RESTRICT,
-    actor_user_id     UUID REFERENCES app_users(id) ON DELETE SET NULL,
-    actor_type        VARCHAR(20) NOT NULL DEFAULT 'USER'
-                      CHECK (actor_type IN ('USER','SERVICE','SYSTEM','SUPPORT')),
-    action            VARCHAR(100) NOT NULL,
-    module_name       VARCHAR(60) NOT NULL,
-    entity_type       VARCHAR(60),
-    entity_id         UUID,
-    outcome           VARCHAR(20) NOT NULL CHECK (outcome IN ('SUCCESS','FAILURE','DENIED')),
-    correlation_id    VARCHAR(100),
-    ip_address        INET,
-    user_agent        VARCHAR(500),
-    old_values        JSONB,
-    new_values        JSONB,
-    metadata          JSONB,
-    occurred_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE TABLE IF NOT EXISTS audit_events
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID REFERENCES societies
+(
+    id
+) ON DELETE RESTRICT,
+    actor_user_id UUID REFERENCES app_users
+(
+    id
+)
+  ON DELETE SET NULL,
+    actor_type VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'USER'
+    CHECK
+(
+    actor_type
+    IN
+(
+    'USER',
+    'SERVICE',
+    'SYSTEM',
+    'SUPPORT'
+)),
+    action VARCHAR
+(
+    100
+) NOT NULL,
+    module_name VARCHAR
+(
+    60
+) NOT NULL,
+    entity_type VARCHAR
+(
+    60
+),
+    entity_id UUID,
+    outcome VARCHAR
+(
+    20
+) NOT NULL CHECK
+(
+    outcome
+    IN
+(
+    'SUCCESS',
+    'FAILURE',
+    'DENIED'
+)),
+    correlation_id VARCHAR
+(
+    100
+),
+    ip_address INET,
+    user_agent VARCHAR
+(
+    500
+),
+    old_values JSONB,
+    new_values JSONB,
+    metadata JSONB,
+    occurred_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
 
 CREATE INDEX IF NOT EXISTS ix_audit_tenant_time
     ON audit_events (society_id, occurred_at DESC);
@@ -865,72 +2894,191 @@ CREATE INDEX IF NOT EXISTS ix_audit_actor
 
 DROP TRIGGER IF EXISTS trg_audit_events_immutable ON audit_events;
 CREATE TRIGGER trg_audit_events_immutable
-BEFORE UPDATE OR DELETE ON audit_events
+    BEFORE UPDATE OR
+DELETE
+ON audit_events
 FOR EACH ROW EXECUTE FUNCTION prevent_update_delete();
 
-CREATE TABLE IF NOT EXISTS outbox_events (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id      UUID REFERENCES societies(id) ON DELETE CASCADE,
-    aggregate_type  VARCHAR(80) NOT NULL,
-    aggregate_id    UUID NOT NULL,
-    event_type      VARCHAR(120) NOT NULL,
-    event_version   INTEGER NOT NULL DEFAULT 1 CHECK (event_version > 0),
-    payload         JSONB NOT NULL,
-    headers         JSONB,
-    status          VARCHAR(20) NOT NULL DEFAULT 'PENDING'
-                    CHECK (status IN ('PENDING','PROCESSING','PUBLISHED','FAILED','DEAD')),
-    attempt_count   INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
-    available_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    published_at    TIMESTAMPTZ,
-    last_error      VARCHAR(2000),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+CREATE TABLE IF NOT EXISTS outbox_events
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    aggregate_type VARCHAR
+(
+    80
+) NOT NULL,
+    aggregate_id UUID NOT NULL,
+    event_type VARCHAR
+(
+    120
+) NOT NULL,
+    event_version INTEGER NOT NULL DEFAULT 1 CHECK
+(
+    event_version >
+    0
+),
+    payload JSONB NOT NULL,
+    headers JSONB,
+    status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'PENDING'
+    CHECK
+(
+    status
+    IN
+(
+    'PENDING',
+    'PROCESSING',
+    'PUBLISHED',
+    'FAILED',
+    'DEAD'
+)),
+    attempt_count INTEGER NOT NULL DEFAULT 0 CHECK
+(
+    attempt_count
+    >=
+    0
+),
+    available_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at TIMESTAMPTZ,
+    last_error VARCHAR
+(
+    2000
+),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
 
 CREATE INDEX IF NOT EXISTS ix_outbox_pending
     ON outbox_events (status, available_at, created_at)
     WHERE status IN ('PENDING','FAILED');
 
-CREATE TABLE IF NOT EXISTS idempotency_records (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id       UUID REFERENCES societies(id) ON DELETE CASCADE,
-    idempotency_key  VARCHAR(180) NOT NULL,
-    operation_name   VARCHAR(100) NOT NULL,
-    request_hash     VARCHAR(64),
-    response_status  INTEGER,
-    response_body    JSONB,
-    processing_state VARCHAR(20) NOT NULL DEFAULT 'PROCESSING'
-                     CHECK (processing_state IN ('PROCESSING','COMPLETED','FAILED')),
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at       TIMESTAMPTZ NOT NULL,
-    UNIQUE (society_id, operation_name, idempotency_key)
-);
+CREATE TABLE IF NOT EXISTS idempotency_records
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    idempotency_key VARCHAR
+(
+    180
+) NOT NULL,
+    operation_name VARCHAR
+(
+    100
+) NOT NULL,
+    request_hash VARCHAR
+(
+    64
+),
+    response_status INTEGER,
+    response_body JSONB,
+    processing_state VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'PROCESSING'
+    CHECK
+(
+    processing_state
+    IN
+(
+    'PROCESSING',
+    'COMPLETED',
+    'FAILED'
+)),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMPTZ NOT NULL,
+    UNIQUE
+(
+    society_id,
+    operation_name,
+    idempotency_key
+)
+    );
 
 CREATE INDEX IF NOT EXISTS ix_idempotency_expiry ON idempotency_records (expires_at);
 
-CREATE TABLE IF NOT EXISTS export_requests (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    society_id      UUID NOT NULL REFERENCES societies(id) ON DELETE CASCADE,
-    requested_by    UUID NOT NULL REFERENCES app_users(id) ON DELETE RESTRICT,
-    export_type     VARCHAR(60) NOT NULL,
-    parameters      JSONB,
-    status          VARCHAR(20) NOT NULL DEFAULT 'PENDING'
-                    CHECK (status IN ('PENDING','PROCESSING','COMPLETED','FAILED','EXPIRED')),
-    object_key      VARCHAR(500),
-    expires_at      TIMESTAMPTZ,
-    error_message   VARCHAR(1000),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    completed_at    TIMESTAMPTZ
-);
+CREATE TABLE IF NOT EXISTS export_requests
+(
+    id
+    UUID
+    PRIMARY
+    KEY
+    DEFAULT
+    gen_random_uuid
+(
+),
+    society_id UUID NOT NULL REFERENCES societies
+(
+    id
+) ON DELETE CASCADE,
+    requested_by UUID NOT NULL REFERENCES app_users
+(
+    id
+)
+  ON DELETE RESTRICT,
+    export_type VARCHAR
+(
+    60
+) NOT NULL,
+    parameters JSONB,
+    status VARCHAR
+(
+    20
+) NOT NULL DEFAULT 'PENDING'
+    CHECK
+(
+    status
+    IN
+(
+    'PENDING',
+    'PROCESSING',
+    'COMPLETED',
+    'FAILED',
+    'EXPIRED'
+)),
+    object_key VARCHAR
+(
+    500
+),
+    expires_at TIMESTAMPTZ,
+    error_message VARCHAR
+(
+    1000
+),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMPTZ
+    );
 
 /* ================================================================
    10. UPDATED-AT TRIGGERS
    ================================================================ */
 
-DO $$
+DO
+$$
 DECLARE
-    table_name TEXT;
+table_name TEXT;
 BEGIN
-    FOREACH table_name IN ARRAY ARRAY[
+    FOREACH
+table_name IN ARRAY ARRAY[
         'societies','app_users','roles','user_society_roles','buildings','units',
         'household_memberships','vehicles','society_settings','charge_heads',
         'billing_runs','invoices','invoice_adjustments','payment_attempts',
@@ -942,12 +3090,12 @@ BEGIN
             'DROP TRIGGER IF EXISTS %I ON %I',
             'trg_' || table_name || '_updated_at', table_name
         );
-        EXECUTE format(
-            'CREATE TRIGGER %I BEFORE UPDATE ON %I '
+EXECUTE format(
+        'CREATE TRIGGER %I BEFORE UPDATE ON %I '
             'FOR EACH ROW EXECUTE FUNCTION set_updated_at()',
-            'trg_' || table_name || '_updated_at', table_name
+        'trg_' || table_name || '_updated_at', table_name
         );
-    END LOOP;
+END LOOP;
 END;
 $$;
 
@@ -955,199 +3103,210 @@ $$;
    11. REPORTING VIEWS
    ================================================================ */
 
-CREATE OR REPLACE VIEW v_unit_balances AS
-SELECT
-    i.society_id,
-    i.unit_id,
-    COALESCE(SUM(i.total_amount), 0)::NUMERIC(19,2) AS total_invoiced,
-    COALESCE(SUM(i.paid_amount), 0)::NUMERIC(19,2) AS total_paid,
-    COALESCE(SUM(i.outstanding_amount), 0)::NUMERIC(19,2) AS total_outstanding,
-    COUNT(*) FILTER (WHERE i.status = 'OVERDUE' OR
+CREATE
+OR REPLACE VIEW v_unit_balances AS
+SELECT i.society_id,
+       i.unit_id,
+       COALESCE(SUM(i.total_amount), 0)::NUMERIC(19,2) AS total_invoiced, COALESCE(SUM(i.paid_amount), 0)::NUMERIC(19,2) AS total_paid, COALESCE(SUM(i.outstanding_amount), 0)::NUMERIC(19,2) AS total_outstanding, COUNT(*) FILTER (WHERE i.status = 'OVERDUE' OR
         (i.status IN ('PUBLISHED','PARTIALLY_PAID') AND i.due_date < CURRENT_DATE)) AS overdue_invoice_count
 FROM invoices i
-WHERE i.status NOT IN ('DRAFT','CANCELLED')
+WHERE i.status NOT IN ('DRAFT', 'CANCELLED')
 GROUP BY i.society_id, i.unit_id;
 
-CREATE OR REPLACE VIEW v_complaint_sla_status AS
-SELECT
-    c.id,
-    c.society_id,
-    c.complaint_number,
-    c.priority,
-    c.status,
-    c.sla_due_at,
-    CASE
-        WHEN c.status IN ('CLOSED','REJECTED') THEN 'COMPLETED'
-        WHEN c.sla_due_at IS NULL THEN 'NOT_CONFIGURED'
-        WHEN CURRENT_TIMESTAMP > c.sla_due_at THEN 'BREACHED'
-        WHEN CURRENT_TIMESTAMP > c.sla_due_at - INTERVAL '2 hours' THEN 'AT_RISK'
-        ELSE 'ON_TRACK'
-    END AS sla_status
+CREATE
+OR REPLACE VIEW v_complaint_sla_status AS
+SELECT c.id,
+       c.society_id,
+       c.complaint_number,
+       c.priority,
+       c.status,
+       c.sla_due_at,
+       CASE
+           WHEN c.status IN ('CLOSED', 'REJECTED') THEN 'COMPLETED'
+           WHEN c.sla_due_at IS NULL THEN 'NOT_CONFIGURED'
+           WHEN CURRENT_TIMESTAMP > c.sla_due_at THEN 'BREACHED'
+           WHEN CURRENT_TIMESTAMP > c.sla_due_at - INTERVAL '2 hours' THEN 'AT_RISK'
+    ELSE 'ON_TRACK'
+END
+AS sla_status
 FROM complaints c;
 
-CREATE OR REPLACE VIEW v_current_visitors AS
-SELECT
-    e.id AS entry_id,
-    e.society_id,
-    e.unit_id,
-    e.visitor_name,
-    e.visitor_mobile,
-    e.vehicle_number,
-    e.check_in_at,
-    e.checked_in_by,
-    CURRENT_TIMESTAMP - e.check_in_at AS duration_inside
+CREATE
+OR REPLACE VIEW v_current_visitors AS
+SELECT e.id                              AS entry_id,
+       e.society_id,
+       e.unit_id,
+       e.visitor_name,
+       e.visitor_mobile,
+       e.vehicle_number,
+       e.check_in_at,
+       e.checked_in_by,
+       CURRENT_TIMESTAMP - e.check_in_at AS duration_inside
 FROM visitor_entries e
 WHERE e.check_out_at IS NULL;
 
-CREATE OR REPLACE VIEW v_collection_summary_monthly AS
-SELECT
-    i.society_id,
-    DATE_TRUNC('month', i.invoice_date)::DATE AS month,
+CREATE
+OR REPLACE VIEW v_collection_summary_monthly AS
+SELECT i.society_id,
+       DATE_TRUNC('month', i.invoice_date) ::DATE AS month,
     SUM(i.total_amount)::NUMERIC(19,2) AS billed_amount,
     SUM(i.paid_amount)::NUMERIC(19,2) AS collected_amount,
     SUM(i.outstanding_amount)::NUMERIC(19,2) AS outstanding_amount
 FROM invoices i
-WHERE i.status NOT IN ('DRAFT','CANCELLED')
+WHERE i.status NOT IN ('DRAFT', 'CANCELLED')
 GROUP BY i.society_id, DATE_TRUNC('month', i.invoice_date);
 
 /* ================================================================
    12. SYSTEM PERMISSIONS AND ROLE TEMPLATES
    ================================================================ */
 
-INSERT INTO permissions (code, module_name, description) VALUES
-('DASHBOARD_VIEW',          'DASHBOARD',  'View authorized dashboard information'),
-('SOCIETY_VIEW',            'SOCIETY',    'View society, building and unit data'),
-('SOCIETY_MANAGE',          'SOCIETY',    'Manage society, building and unit data'),
-('RESIDENT_VIEW',           'RESIDENT',   'View authorized resident information'),
-('RESIDENT_MANAGE',         'RESIDENT',   'Invite and manage residents and memberships'),
-('BILLING_VIEW',            'BILLING',    'View invoices, payments and reports'),
-('BILLING_MANAGE',          'BILLING',    'Configure charge heads and billing runs'),
-('PAYMENT_RECORD',          'PAYMENT',    'Record or initiate payments'),
-('PAYMENT_RECONCILE',       'PAYMENT',    'Reconcile provider payments and settlements'),
-('PAYMENT_REFUND',          'PAYMENT',    'Request or approve refunds'),
-('COMPLAINT_CREATE',        'COMPLAINT',  'Create complaints'),
-('COMPLAINT_VIEW',          'COMPLAINT',  'View authorized complaints'),
-('COMPLAINT_MANAGE',        'COMPLAINT',  'Assign, update and close complaints'),
-('WORK_ORDER_MANAGE',       'WORK_ORDER', 'Create and manage work orders'),
-('VISITOR_APPROVE',         'VISITOR',    'Create and cancel visitor approvals'),
-('VISITOR_CHECK_IN',        'VISITOR',    'Check visitors in and out'),
-('VISITOR_VIEW',            'VISITOR',    'View authorized visitor records'),
-('FACILITY_VIEW',           'FACILITY',   'View facilities and availability'),
-('FACILITY_BOOK',           'FACILITY',   'Create and cancel own bookings'),
-('FACILITY_MANAGE',         'FACILITY',   'Manage facilities and all bookings'),
-('NOTICE_VIEW',             'NOTICE',     'View published notices'),
-('NOTICE_MANAGE',           'NOTICE',     'Create, publish and manage notices'),
-('DOCUMENT_VIEW',           'DOCUMENT',   'View authorized documents'),
-('DOCUMENT_MANAGE',         'DOCUMENT',   'Upload and manage documents'),
-('REPORT_VIEW',             'REPORT',     'View authorized reports'),
-('REPORT_EXPORT',           'REPORT',     'Export authorized report data'),
-('USER_MANAGE',             'SECURITY',   'Manage users, roles and memberships'),
-('SETTINGS_MANAGE',         'SETTINGS',   'Manage society policies and settings'),
-('AUDIT_VIEW',              'AUDIT',      'View audit history')
-ON CONFLICT (code) DO UPDATE
-SET module_name = EXCLUDED.module_name,
+INSERT INTO permissions (code, module_name, description)
+VALUES ('DASHBOARD_VIEW', 'DASHBOARD', 'View authorized dashboard information'),
+       ('SOCIETY_VIEW', 'SOCIETY', 'View society, building and unit data'),
+       ('SOCIETY_MANAGE', 'SOCIETY', 'Manage society, building and unit data'),
+       ('RESIDENT_VIEW', 'RESIDENT', 'View authorized resident information'),
+       ('RESIDENT_MANAGE', 'RESIDENT', 'Invite and manage residents and memberships'),
+       ('BILLING_VIEW', 'BILLING', 'View invoices, payments and reports'),
+       ('BILLING_MANAGE', 'BILLING', 'Configure charge heads and billing runs'),
+       ('PAYMENT_RECORD', 'PAYMENT', 'Record or initiate payments'),
+       ('PAYMENT_RECONCILE', 'PAYMENT', 'Reconcile provider payments and settlements'),
+       ('PAYMENT_REFUND', 'PAYMENT', 'Request or approve refunds'),
+       ('COMPLAINT_CREATE', 'COMPLAINT', 'Create complaints'),
+       ('COMPLAINT_VIEW', 'COMPLAINT', 'View authorized complaints'),
+       ('COMPLAINT_MANAGE', 'COMPLAINT', 'Assign, update and close complaints'),
+       ('WORK_ORDER_MANAGE', 'WORK_ORDER', 'Create and manage work orders'),
+       ('VISITOR_APPROVE', 'VISITOR', 'Create and cancel visitor approvals'),
+       ('VISITOR_CHECK_IN', 'VISITOR', 'Check visitors in and out'),
+       ('VISITOR_VIEW', 'VISITOR', 'View authorized visitor records'),
+       ('FACILITY_VIEW', 'FACILITY', 'View facilities and availability'),
+       ('FACILITY_BOOK', 'FACILITY', 'Create and cancel own bookings'),
+       ('FACILITY_MANAGE', 'FACILITY', 'Manage facilities and all bookings'),
+       ('NOTICE_VIEW', 'NOTICE', 'View published notices'),
+       ('NOTICE_MANAGE', 'NOTICE', 'Create, publish and manage notices'),
+       ('DOCUMENT_VIEW', 'DOCUMENT', 'View authorized documents'),
+       ('DOCUMENT_MANAGE', 'DOCUMENT', 'Upload and manage documents'),
+       ('REPORT_VIEW', 'REPORT', 'View authorized reports'),
+       ('REPORT_EXPORT', 'REPORT', 'Export authorized report data'),
+       ('USER_MANAGE', 'SECURITY', 'Manage users, roles and memberships'),
+       ('SETTINGS_MANAGE', 'SETTINGS', 'Manage society policies and settings'),
+       ('AUDIT_VIEW', 'AUDIT', 'View audit history') ON CONFLICT (code) DO
+UPDATE
+    SET module_name = EXCLUDED.module_name,
     description = EXCLUDED.description;
 
-INSERT INTO roles (society_id, code, name, description, is_system) VALUES
-(NULL, 'SOCIETY_ADMIN',     'Society Administrator', 'Manages society configuration and users', TRUE),
-(NULL, 'COMMITTEE_MEMBER',  'Committee Member',      'Reviews society operations and governance', TRUE),
-(NULL, 'ACCOUNTANT',        'Accountant',             'Manages billing, payments and reconciliation', TRUE),
-(NULL, 'RESIDENT',          'Resident',               'Uses resident self-service functions', TRUE),
-(NULL, 'SECURITY_GUARD',    'Security Guard',         'Manages visitor entry and exit', TRUE),
-(NULL, 'FACILITY_MANAGER',  'Facility Manager',       'Manages complaints, work and facilities', TRUE),
-(NULL, 'VENDOR_TECHNICIAN', 'Vendor Technician',      'Works on assigned service requests', TRUE),
-(NULL, 'PLATFORM_ADMIN',    'Platform Administrator', 'Operates the shared platform', TRUE)
-ON CONFLICT DO NOTHING;
+INSERT INTO roles (society_id, code, name, description, is_system)
+VALUES (NULL, 'SOCIETY_ADMIN', 'Society Administrator', 'Manages society configuration and users', TRUE),
+       (NULL, 'COMMITTEE_MEMBER', 'Committee Member', 'Reviews society operations and governance', TRUE),
+       (NULL, 'ACCOUNTANT', 'Accountant', 'Manages billing, payments and reconciliation', TRUE),
+       (NULL, 'RESIDENT', 'Resident', 'Uses resident self-service functions', TRUE),
+       (NULL, 'SECURITY_GUARD', 'Security Guard', 'Manages visitor entry and exit', TRUE),
+       (NULL, 'FACILITY_MANAGER', 'Facility Manager', 'Manages complaints, work and facilities', TRUE),
+       (NULL, 'VENDOR_TECHNICIAN', 'Vendor Technician', 'Works on assigned service requests', TRUE),
+       (NULL, 'PLATFORM_ADMIN', 'Platform Administrator', 'Operates the shared platform', TRUE) ON CONFLICT DO NOTHING;
 
 /* Society administrator permissions. */
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
-FROM roles r CROSS JOIN permissions p
-WHERE r.code = 'SOCIETY_ADMIN' AND r.society_id IS NULL
-ON CONFLICT DO NOTHING;
+FROM roles r
+         CROSS JOIN permissions p
+WHERE r.code = 'SOCIETY_ADMIN'
+  AND r.society_id IS NULL ON CONFLICT DO NOTHING;
 
 /* Resident permissions. */
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
-FROM roles r JOIN permissions p ON p.code IN (
-    'DASHBOARD_VIEW','SOCIETY_VIEW','RESIDENT_VIEW','BILLING_VIEW','PAYMENT_RECORD',
-    'COMPLAINT_CREATE','COMPLAINT_VIEW','VISITOR_APPROVE','VISITOR_VIEW',
-    'FACILITY_VIEW','FACILITY_BOOK','NOTICE_VIEW','DOCUMENT_VIEW'
-)
-WHERE r.code = 'RESIDENT' AND r.society_id IS NULL
-ON CONFLICT DO NOTHING;
+FROM roles r
+         JOIN permissions p ON p.code IN (
+                                          'DASHBOARD_VIEW', 'SOCIETY_VIEW', 'RESIDENT_VIEW', 'BILLING_VIEW',
+                                          'PAYMENT_RECORD',
+                                          'COMPLAINT_CREATE', 'COMPLAINT_VIEW', 'VISITOR_APPROVE', 'VISITOR_VIEW',
+                                          'FACILITY_VIEW', 'FACILITY_BOOK', 'NOTICE_VIEW', 'DOCUMENT_VIEW'
+    )
+WHERE r.code = 'RESIDENT'
+  AND r.society_id IS NULL ON CONFLICT DO NOTHING;
 
 /* Accountant permissions. */
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
-FROM roles r JOIN permissions p ON p.code IN (
-    'DASHBOARD_VIEW','SOCIETY_VIEW','RESIDENT_VIEW','BILLING_VIEW','BILLING_MANAGE',
-    'PAYMENT_RECORD','PAYMENT_RECONCILE','PAYMENT_REFUND','REPORT_VIEW','REPORT_EXPORT','AUDIT_VIEW'
-)
-WHERE r.code = 'ACCOUNTANT' AND r.society_id IS NULL
-ON CONFLICT DO NOTHING;
+FROM roles r
+         JOIN permissions p ON p.code IN (
+                                          'DASHBOARD_VIEW', 'SOCIETY_VIEW', 'RESIDENT_VIEW', 'BILLING_VIEW',
+                                          'BILLING_MANAGE',
+                                          'PAYMENT_RECORD', 'PAYMENT_RECONCILE', 'PAYMENT_REFUND', 'REPORT_VIEW',
+                                          'REPORT_EXPORT', 'AUDIT_VIEW'
+    )
+WHERE r.code = 'ACCOUNTANT'
+  AND r.society_id IS NULL ON CONFLICT DO NOTHING;
 
 /* Security guard permissions. */
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
-FROM roles r JOIN permissions p ON p.code IN (
-    'DASHBOARD_VIEW','SOCIETY_VIEW','VISITOR_VIEW','VISITOR_CHECK_IN'
-)
-WHERE r.code = 'SECURITY_GUARD' AND r.society_id IS NULL
-ON CONFLICT DO NOTHING;
+FROM roles r
+         JOIN permissions p ON p.code IN (
+                                          'DASHBOARD_VIEW', 'SOCIETY_VIEW', 'VISITOR_VIEW', 'VISITOR_CHECK_IN'
+    )
+WHERE r.code = 'SECURITY_GUARD'
+  AND r.society_id IS NULL ON CONFLICT DO NOTHING;
 
 /* Facility manager permissions. */
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
-FROM roles r JOIN permissions p ON p.code IN (
-    'DASHBOARD_VIEW','SOCIETY_VIEW','RESIDENT_VIEW','COMPLAINT_VIEW','COMPLAINT_MANAGE',
-    'WORK_ORDER_MANAGE','FACILITY_VIEW','FACILITY_MANAGE','NOTICE_VIEW','DOCUMENT_VIEW','REPORT_VIEW'
-)
-WHERE r.code = 'FACILITY_MANAGER' AND r.society_id IS NULL
-ON CONFLICT DO NOTHING;
+FROM roles r
+         JOIN permissions p ON p.code IN (
+                                          'DASHBOARD_VIEW', 'SOCIETY_VIEW', 'RESIDENT_VIEW', 'COMPLAINT_VIEW',
+                                          'COMPLAINT_MANAGE',
+                                          'WORK_ORDER_MANAGE', 'FACILITY_VIEW', 'FACILITY_MANAGE', 'NOTICE_VIEW',
+                                          'DOCUMENT_VIEW', 'REPORT_VIEW'
+    )
+WHERE r.code = 'FACILITY_MANAGER'
+  AND r.society_id IS NULL ON CONFLICT DO NOTHING;
 
 /* Vendor technician permissions; resource ownership must also be checked in the application. */
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
-FROM roles r JOIN permissions p ON p.code IN ('DASHBOARD_VIEW','COMPLAINT_VIEW')
-WHERE r.code = 'VENDOR_TECHNICIAN' AND r.society_id IS NULL
-ON CONFLICT DO NOTHING;
+FROM roles r
+         JOIN permissions p ON p.code IN ('DASHBOARD_VIEW', 'COMPLAINT_VIEW')
+WHERE r.code = 'VENDOR_TECHNICIAN'
+  AND r.society_id IS NULL ON CONFLICT DO NOTHING;
 
 /* Committee member permissions. */
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
-FROM roles r JOIN permissions p ON p.code IN (
-    'DASHBOARD_VIEW','SOCIETY_VIEW','RESIDENT_VIEW','BILLING_VIEW','COMPLAINT_VIEW',
-    'VISITOR_VIEW','FACILITY_VIEW','NOTICE_VIEW','NOTICE_MANAGE','DOCUMENT_VIEW',
-    'REPORT_VIEW','REPORT_EXPORT','AUDIT_VIEW'
-)
-WHERE r.code = 'COMMITTEE_MEMBER' AND r.society_id IS NULL
-ON CONFLICT DO NOTHING;
+FROM roles r
+         JOIN permissions p ON p.code IN (
+                                          'DASHBOARD_VIEW', 'SOCIETY_VIEW', 'RESIDENT_VIEW', 'BILLING_VIEW',
+                                          'COMPLAINT_VIEW',
+                                          'VISITOR_VIEW', 'FACILITY_VIEW', 'NOTICE_VIEW', 'NOTICE_MANAGE',
+                                          'DOCUMENT_VIEW',
+                                          'REPORT_VIEW', 'REPORT_EXPORT', 'AUDIT_VIEW'
+    )
+WHERE r.code = 'COMMITTEE_MEMBER'
+  AND r.society_id IS NULL ON CONFLICT DO NOTHING;
 
 /* Platform admin receives operational permissions; business-data access still requires explicit tenant context. */
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
-FROM roles r JOIN permissions p ON p.code IN (
-    'DASHBOARD_VIEW','SOCIETY_VIEW','SOCIETY_MANAGE','USER_MANAGE','AUDIT_VIEW'
-)
-WHERE r.code = 'PLATFORM_ADMIN' AND r.society_id IS NULL
-ON CONFLICT DO NOTHING;
+FROM roles r
+         JOIN permissions p ON p.code IN (
+                                          'DASHBOARD_VIEW', 'SOCIETY_VIEW', 'SOCIETY_MANAGE', 'USER_MANAGE',
+                                          'AUDIT_VIEW'
+    )
+WHERE r.code = 'PLATFORM_ADMIN'
+  AND r.society_id IS NULL ON CONFLICT DO NOTHING;
 
 /* Default notification templates. */
 INSERT INTO notification_templates
     (society_id, template_code, channel, subject_template, body_template)
-VALUES
-(NULL, 'INVOICE_PUBLISHED', 'EMAIL', 'New maintenance invoice {{invoiceNumber}}',
- 'Invoice {{invoiceNumber}} for {{amount}} is due on {{dueDate}}.'),
-(NULL, 'PAYMENT_CONFIRMED', 'EMAIL', 'Payment received - {{receiptNumber}}',
- 'Your payment of {{amount}} was received successfully.'),
-(NULL, 'COMPLAINT_UPDATED', 'IN_APP', 'Complaint {{complaintNumber}} updated',
- 'Your complaint status is now {{status}}.'),
-(NULL, 'VISITOR_ARRIVED', 'PUSH', 'Visitor arrived',
- '{{visitorName}} has checked in for unit {{unitNumber}}.'),
-(NULL, 'BOOKING_CONFIRMED', 'EMAIL', 'Facility booking confirmed',
- 'Your {{facilityName}} booking is confirmed for {{startAt}}.')
-ON CONFLICT DO NOTHING;
+VALUES (NULL, 'INVOICE_PUBLISHED', 'EMAIL', 'New maintenance invoice {{invoiceNumber}}',
+        'Invoice {{invoiceNumber}} for {{amount}} is due on {{dueDate}}.'),
+       (NULL, 'PAYMENT_CONFIRMED', 'EMAIL', 'Payment received - {{receiptNumber}}',
+        'Your payment of {{amount}} was received successfully.'),
+       (NULL, 'COMPLAINT_UPDATED', 'IN_APP', 'Complaint {{complaintNumber}} updated',
+        'Your complaint status is now {{status}}.'),
+       (NULL, 'VISITOR_ARRIVED', 'PUSH', 'Visitor arrived',
+        '{{visitorName}} has checked in for unit {{unitNumber}}.'),
+       (NULL, 'BOOKING_CONFIRMED', 'EMAIL', 'Facility booking confirmed',
+        'Your {{facilityName}} booking is confirmed for {{startAt}}.') ON CONFLICT DO NOTHING;
 
 COMMIT;
 

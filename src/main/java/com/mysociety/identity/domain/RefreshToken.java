@@ -3,6 +3,8 @@ package com.mysociety.identity.domain;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -22,6 +24,7 @@ public class RefreshToken {
     @Column(name = "device_name")
     private String deviceName;
     @Column(name = "ip_address", columnDefinition = "inet")
+    @JdbcTypeCode(SqlTypes.INET)
     private String ipAddress;
     @Column(name = "user_agent")
     private String userAgent;

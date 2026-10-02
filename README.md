@@ -34,6 +34,14 @@ The API base URL is `http://localhost:8081/api/v1`. OpenAPI is available at
 `http://localhost:8081/api/v1/swagger-ui.html`; health is available at
 `http://localhost:8081/api/v1/actuator/health`.
 
+## Database schema
+
+Apply `database/migrations/V1__identity_schema.sql` before starting the
+service. It creates only Identity Service-owned tables and uses idempotent
+PostgreSQL setup. See [database/README.md](database/README.md) for execution,
+ownership, and cross-service reference details. Hibernate remains configured
+with `ddl-auto=validate` and does not generate runtime DDL.
+
 ## Security
 
 Do not commit production credentials or JWT signing secrets. Use environment

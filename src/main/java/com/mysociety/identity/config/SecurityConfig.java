@@ -39,7 +39,7 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder decoder) throws Exception {
         return http.csrf(csrf -> csrf.disable()).sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(a -> a.requestMatchers("/auth/login", "/auth/refresh", "/openapi/**", "/swagger-ui/**", "/swagger-ui.html", "/actuator/health/**").permitAll()
+                .authorizeHttpRequests(a -> a.requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh", "/openapi/**", "/swagger-ui/**", "/swagger-ui.html", "/actuator/health/**").permitAll()
                         .requestMatchers("/actuator/**").hasAuthority("SCOPE_operations:read").anyRequest().authenticated())
                 .oauth2ResourceServer(o -> o.jwt(j -> j.decoder(decoder))).build();
     }
